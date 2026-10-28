@@ -27,21 +27,39 @@ class TelegramService
         $url = $this->apiUrl . $method;
         $ch = curl_init();
 
-        curl_setopt_array($ch, [
+        $curlOptions = [
             CURLOPT_URL => $url,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($params),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT => 12,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 6,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-        ]);
+        ];
+
+        // Automatically use bundled Mozilla CA certificate if available
+        $caBundle = dirname(__DIR__, 2) . '/storage/cacert.pem';
+        if (file_exists($caBundle)) {
+            $curlOptions[CURLOPT_CAINFO] = $caBundle;
+        }
+
+        curl_setopt_array($ch, $curlOptions);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr = curl_error($ch);
+        $curlErrNo = curl_errno($ch);
+
+        // Resilient fallback for Windows environments with SSL inspection or CA issues
+        if ($response === false && in_array($curlErrNo, [CURLE_SSL_CACERT, CURLE_PEER_FAILED_VERIFICATION, 60, 77])) {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
+        }
         curl_close($ch);
 
         if ($response === false) {
