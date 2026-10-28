@@ -34,6 +34,7 @@ $pctColor = $pct >= 80 ? 'success' : ($pct >= 40 ? 'warning' : 'danger');
         </h6>
         <div class="small text-muted">
             Sent: <?= format_tz($message['message_date']) ?> (EAT)
+            &bull; Source: <span class="badge bg-light text-dark border"><?= $message['tracking_source'] === 'auto' ? 'Conversation (Auto)' : e(ucfirst($message['tracking_source'])) ?></span>
             <?php if (!empty($message['reference_code'])): ?>
                 &bull; Reference: <span class="badge bg-primary-subtle text-primary border"><?= e($message['reference_code']) ?></span>
             <?php endif; ?>

@@ -54,6 +54,7 @@ class TrackedMessageController
                   AND gm.joined_at <= :mdate1 
                   AND (gm.left_at IS NULL OR gm.left_at > :mdate2)
                   AND m.is_bot = 0
+                  AND m.telegram_user_id != :sender_id
                 ORDER BY 
                   CASE 
                     WHEN mr.status = 'replied' THEN 1
@@ -69,6 +70,7 @@ class TrackedMessageController
             ':gid' => $message['group_id'],
             ':mdate1' => $message['message_date'],
             ':mdate2' => $message['message_date'],
+            ':sender_id' => $message['telegram_user_id'],
         ]);
 
         // Normalize status for members who have no response row yet

@@ -143,12 +143,63 @@
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white py-3">
         <h5 class="card-title mb-0 fw-bold" style="color: var(--kaldis-primary);">
-            <i class="bi bi-sliders me-2"></i> Bot Credentials &amp; Tracking Triggers
+            <i class="bi bi-sliders me-2"></i> Bot Credentials &amp; Tracking Configuration
         </h5>
     </div>
     <div class="card-body p-4">
         <form method="POST" action="<?= url('settings/bot') ?>">
             <?= csrf_field() ?>
+
+            <!-- Conversation Tracking Mode Selection -->
+            <div class="mb-4 p-3 rounded border bg-light bg-opacity-50">
+                <label class="form-label fw-bold text-dark mb-2 d-flex align-items-center">
+                    <i class="bi bi-chat-dots-fill text-primary me-2 fs-5"></i> Conversation Tracking Mode
+                </label>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-check p-3 bg-white rounded border h-100 d-block cursor-pointer <?= $trackingMode === 'all_authorized' ? 'border-primary shadow-sm bg-primary-subtle' : '' ?>" style="cursor: pointer;">
+                            <input class="form-check-input ms-0 me-2" type="radio" name="tracking_mode" id="mode_all_authorized" value="all_authorized" <?= $trackingMode === 'all_authorized' ? 'checked' : '' ?>>
+                            <span class="fw-semibold text-dark">
+                                Track Each Conversation
+                                <?php if ($trackingMode === 'all_authorized'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Active</span>
+                                <?php endif; ?>
+                            </span>
+                            <span class="d-block text-muted small mt-2">
+                                Automatically tracks <strong>every message</strong> sent by authorized sender(s) in monitored groups as a conversation. No need to type <code>#track</code>.
+                            </span>
+                        </label>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-check p-3 bg-white rounded border h-100 d-block cursor-pointer <?= $trackingMode === 'trigger_only' ? 'border-primary shadow-sm' : '' ?>" style="cursor: pointer;">
+                            <input class="form-check-input ms-0 me-2" type="radio" name="tracking_mode" id="mode_trigger_only" value="trigger_only" <?= $trackingMode === 'trigger_only' ? 'checked' : '' ?>>
+                            <span class="fw-semibold text-dark">
+                                Trigger Only (#track / /track)
+                                <?php if ($trackingMode === 'trigger_only'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Active</span>
+                                <?php endif; ?>
+                            </span>
+                            <span class="d-block text-muted small mt-2">
+                                Only tracks messages that explicitly contain the <code>#track</code> hashtag or are replied to with the <code>/track</code> command.
+                            </span>
+                        </label>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-check p-3 bg-white rounded border h-100 d-block cursor-pointer <?= $trackingMode === 'all_messages' ? 'border-primary shadow-sm' : '' ?>" style="cursor: pointer;">
+                            <input class="form-check-input ms-0 me-2" type="radio" name="tracking_mode" id="mode_all_messages" value="all_messages" <?= $trackingMode === 'all_messages' ? 'checked' : '' ?>>
+                            <span class="fw-semibold text-dark">
+                                Track All Group Messages
+                                <?php if ($trackingMode === 'all_messages'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Active</span>
+                                <?php endif; ?>
+                            </span>
+                            <span class="d-block text-muted small mt-2">
+                                Automatically tracks every top-level message posted by any member in monitored groups.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
 
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
@@ -204,7 +255,7 @@
                         <input type="text" name="authorized_user_ids" class="form-control font-monospace" value="<?= e($authUsersStr) ?>" placeholder="123456789, 987654321" required>
                     </div>
                     <div class="form-text small">
-                        Comma-separated numeric Telegram User IDs. Only messages from these users will be tracked. Find your ID by messaging <code>@userinfobot</code>.
+                        Comma-separated numeric Telegram User IDs. Messages from these users will be tracked. Find your ID by messaging <code>@userinfobot</code>.
                     </div>
                 </div>
 

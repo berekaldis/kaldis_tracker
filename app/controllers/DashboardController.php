@@ -97,6 +97,7 @@ class DashboardController
             'messages' => $trackedMessages,
             'groups' => $groups,
             'summary' => $summaryCardStats,
+            'trackingMode' => (string)config('telegram.tracking_mode', 'all_authorized'),
             'filters' => [
                 'search' => $search,
                 'group_id' => $groupId,
@@ -123,7 +124,7 @@ class DashboardController
      */
     public function calculateMessageStats(int $trackedMessageId, int $groupId, string $messageDate): array
     {
-        // 1. Eligible members: on roster active in group at message_date
+        // 1. Eligible members: on roster active in group at message_date (excluding the message author)
         $eligibleMembersCount = (int)Database::fetchColumn(
             "SELECT COUNT(DISTINCT gm.member_id) 
              FROM group_members gm
@@ -131,8 +132,9 @@ class DashboardController
              WHERE gm.group_id = :gid 
                AND gm.joined_at <= :mdate1 
                AND (gm.left_at IS NULL OR gm.left_at > :mdate2)
-               AND m.is_bot = 0",
-            [':gid' => $groupId, ':mdate1' => $messageDate, ':mdate2' => $messageDate]
+               AND m.is_bot = 0
+               AND m.telegram_user_id != (SELECT tm.telegram_user_id FROM tracked_messages tm WHERE tm.id = :tmid)",
+            [':gid' => $groupId, ':mdate1' => $messageDate, ':mdate2' => $messageDate, ':tmid' => $trackedMessageId]
         );
 
         // 2. Count responses by status

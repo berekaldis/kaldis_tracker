@@ -7,6 +7,19 @@ $isOwner = AuthService::isOwner();
         <h3 class="fw-bold mb-1" style="color: var(--kaldis-primary);">Response Monitoring Dashboard</h3>
         <p class="text-muted small mb-0">
             Real-time tracking of message responses across registered Kaldis Telegram groups.
+            <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
+                <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">
+                    <i class="bi bi-chat-dots-fill me-1"></i> Tracking Each Conversation
+                </span>
+            <?php elseif (($trackingMode ?? '') === 'all_messages'): ?>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">
+                    <i class="bi bi-globe me-1"></i> Tracking All Group Messages
+                </span>
+            <?php else: ?>
+                <span class="badge bg-secondary-subtle text-secondary border ms-2">
+                    <i class="bi bi-hash me-1"></i> #track Trigger Only
+                </span>
+            <?php endif; ?>
         </p>
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0">
@@ -172,7 +185,13 @@ $isOwner = AuthService::isOwner();
                         <td colspan="9" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
                             <div>No tracked messages found matching your criteria.</div>
-                            <small class="text-muted">Post a message with <code><?= e(config('telegram.track_hashtag', '#track')) ?></code> in a registered group or track one manually.</small>
+                            <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
+                                <small class="text-muted">Post any message in a registered group from your authorized Telegram account to start tracking responses automatically.</small>
+                            <?php elseif (($trackingMode ?? '') === 'all_messages'): ?>
+                                <small class="text-muted">Post any message in a registered group to start tracking responses automatically.</small>
+                            <?php else: ?>
+                                <small class="text-muted">Post a message with <code><?= e(config('telegram.track_hashtag', '#track')) ?></code> in a registered group or track one manually.</small>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php else: ?>

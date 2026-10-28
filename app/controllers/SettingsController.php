@@ -26,6 +26,8 @@ class SettingsController
 
         $authUsers = config('telegram.authorized_user_ids', []);
         $authUsersStr = is_array($authUsers) ? implode(', ', $authUsers) : (string)$authUsers;
+        $trackingMode = (string)config('telegram.tracking_mode', 'all_authorized');
+        $trackAllMessages = (bool)config('telegram.track_all_messages', true);
         $trackHashtag = config('telegram.track_hashtag', '#track');
         $trackCommand = config('telegram.track_command', '/track');
 
@@ -44,6 +46,8 @@ class SettingsController
             'webhookSecret' => $webhookSecret,
             'webhookUrl' => $webhookUrl,
             'authUsersStr' => $authUsersStr,
+            'trackingMode' => $trackingMode,
+            'trackAllMessages' => $trackAllMessages,
             'trackHashtag' => $trackHashtag,
             'trackCommand' => $trackCommand,
             'botInfo' => $botInfo,
@@ -65,6 +69,11 @@ class SettingsController
         $webhookSecret = trim($_POST['webhook_secret'] ?? '');
         $webhookUrl = trim($_POST['webhook_url'] ?? '');
         $authorizedUserIds = trim($_POST['authorized_user_ids'] ?? '');
+        $trackingMode = trim($_POST['tracking_mode'] ?? 'all_authorized');
+        if (!in_array($trackingMode, ['all_authorized', 'all_messages', 'trigger_only'])) {
+            $trackingMode = 'all_authorized';
+        }
+        $trackAllMessages = ($trackingMode !== 'trigger_only') ? '1' : '0';
         $trackHashtag = trim($_POST['track_hashtag'] ?? '#track');
         $trackCommand = trim($_POST['track_command'] ?? '/track');
 
@@ -81,6 +90,8 @@ class SettingsController
             'telegram_webhook_secret' => $webhookSecret,
             'telegram_webhook_url' => $webhookUrl,
             'telegram_authorized_user_ids' => $authorizedUserIds,
+            'telegram_tracking_mode' => $trackingMode,
+            'telegram_track_all_messages' => $trackAllMessages,
             'telegram_track_hashtag' => $trackHashtag,
             'telegram_track_command' => $trackCommand,
         ]);
@@ -89,6 +100,7 @@ class SettingsController
             'bot_username' => $botUsername,
             'webhook_url' => $webhookUrl,
             'authorized_users' => $authorizedUserIds,
+            'tracking_mode' => $trackingMode,
             'track_hashtag' => $trackHashtag,
         ]);
 

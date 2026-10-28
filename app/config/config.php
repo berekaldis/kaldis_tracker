@@ -29,8 +29,10 @@ return [
         'bot_username' => getenv('TELEGRAM_BOT_USERNAME') ?: 'KaldisTrackerBot',
         'webhook_secret' => getenv('TELEGRAM_WEBHOOK_SECRET') ?: 'KaldisSecureWebhookToken_2026',
         'webhook_url' => getenv('TELEGRAM_WEBHOOK_URL') ?: '',
-        // Numeric Telegram User IDs of authorized sender(s) whose #track messages get tracked.
+        // Numeric Telegram User IDs of authorized sender(s) whose messages get tracked.
         'authorized_user_ids' => [123456789],
+        'tracking_mode' => 'all_authorized', // 'all_authorized' (tracks each conversation), 'all_messages', or 'trigger_only'
+        'track_all_messages' => true,
         'track_hashtag' => '#track',
         'track_command' => '/track',
         'enable_reactions' => false,

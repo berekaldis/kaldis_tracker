@@ -16,6 +16,9 @@ if (!function_exists('config')) {
             if ($key === 'telegram.authorized_user_ids' && is_string($dbVal)) {
                 return array_filter(array_map('trim', explode(',', $dbVal)));
             }
+            if ($key === 'telegram.track_all_messages') {
+                return (bool)(int)$dbVal;
+            }
             if ($key === 'app.retention_days') {
                 return (int)$dbVal;
             }

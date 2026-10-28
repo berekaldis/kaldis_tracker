@@ -169,7 +169,63 @@ class MessageTrackingService
             );
         }
 
-        // Case 3: Candidate reply to an already tracked message
+        // Case 3: Automatic tracking of each conversation
+        // Check if message is a continuation / reply to an existing tracked conversation
+        $replyTo = $message['reply_to_message'] ?? null;
+        $isTopicMessage = !empty($message['is_topic_message']);
+        $isReplyToTracked = false;
+
+        if ($replyTo !== null) {
+            $replyToMessageId = (int)$replyTo['message_id'];
+            // In Telegram topics, top-level topic messages have reply_to_message pointing to the thread root.
+            if ($isTopicMessage && $threadId !== null && $replyToMessageId === $threadId) {
+                $isReplyToTracked = false;
+            } else {
+                $targetTracked = Database::fetch(
+                    "SELECT id FROM tracked_messages WHERE group_id = :gid AND telegram_message_id = :mid AND is_active = 1",
+                    [':gid' => $group['id'], ':mid' => $replyToMessageId]
+                );
+                if ($targetTracked) {
+                    $isReplyToTracked = true;
+                } else {
+                    $priorResp = Database::fetch(
+                        "SELECT id FROM message_responses WHERE response_telegram_message_id = :rmid",
+                        [':rmid' => $replyToMessageId]
+                    );
+                    if ($priorResp) {
+                        $isReplyToTracked = true;
+                    }
+                }
+            }
+        }
+
+        $trackingMode = (string)config('telegram.tracking_mode', 'all_authorized');
+        $trackAllMessages = (bool)config('telegram.track_all_messages', true);
+
+        if (!$isReplyToTracked) {
+            $shouldAutoTrack = false;
+            if ($trackingMode === 'all_authorized' && $isAuthorizedUser) {
+                $shouldAutoTrack = true;
+            } elseif ($trackingMode === 'all_messages' || $trackingMode === 'all_group_messages') {
+                $shouldAutoTrack = true;
+            } elseif ($trackAllMessages && $isAuthorizedUser && $trackingMode !== 'trigger_only') {
+                $shouldAutoTrack = true;
+            }
+
+            if ($shouldAutoTrack && !empty(trim($messageText))) {
+                return $this->registerTrackedMessage(
+                    (int)$group['id'],
+                    $messageId,
+                    $userId,
+                    $threadId,
+                    $messageText,
+                    $messageDate,
+                    'auto'
+                );
+            }
+        }
+
+        // Case 4: Candidate reply to an already tracked message
         // Phase 1 captures reply candidates and forwards to tracking engine
         $this->processCandidateReply($group, $member, $message, $messageDate);
 
@@ -518,6 +574,11 @@ class MessageTrackingService
             }
 
             if ($tracked) {
+                // If the author replies to their own tracked message, do not record author as a member response
+                if ((int)$tracked['telegram_user_id'] === $userId) {
+                    return; // Author follow-up in own thread
+                }
+
                 // Direct reply to our tracked message!
                 // Rule 8: Do not count messages sent before the tracked message
                 if ($replyDate > $tracked['message_date']) {
@@ -543,6 +604,15 @@ class MessageTrackingService
             );
 
             if ($priorResponse) {
+                // If the author of the tracked message is replying in this thread, do not record author as a member response
+                $parentTracked = Database::fetch(
+                    "SELECT telegram_user_id FROM tracked_messages WHERE id = :id",
+                    [':id' => $priorResponse['tracked_message_id']]
+                );
+                if ($parentTracked && (int)$parentTracked['telegram_user_id'] === $userId) {
+                    return; // Author follow-up in own thread
+                }
+
                 $this->recordResponse(
                     (int)$priorResponse['tracked_message_id'],
                     $memberId,

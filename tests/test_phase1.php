@@ -94,7 +94,8 @@ $testChatId = -1009876543210;
 $testOldChatId = -9876543210;
 $groupMigrateTestId = -554433221;
 $supergroupMigrateId = -100554433221;
-$authUserId = 123456789; // matching config
+$configuredAuthUsers = (array)config('telegram.authorized_user_ids', []);
+$authUserId = !empty($configuredAuthUsers) ? (int)$configuredAuthUsers[0] : 123456789; // matching active config
 $member1Id = 555000111;
 $member2Id = 555000222;
 
