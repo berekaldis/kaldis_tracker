@@ -94,7 +94,25 @@ class MessageTrackingService
         // C. Track / update member identity if sender is a user
         $from = $message['from'] ?? null;
         $senderChat = $message['sender_chat'] ?? null;
-        $messageText = $message['text'] ?? $message['caption'] ?? '';
+        $rawText = $message['text'] ?? '';
+        $caption = $message['caption'] ?? '';
+        $messageText = $rawText;
+
+        if (!empty($message['photo'])) {
+            $messageText = '[Photo' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['voice'])) {
+            $messageText = '[Voice Message' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['video'])) {
+            $messageText = '[Video' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['document'])) {
+            $docName = $message['document']['file_name'] ?? 'Document';
+            $messageText = "[Document: {$docName}]" . (!empty($caption) ? ' ' . $caption : '');
+        } elseif (!empty($message['sticker'])) {
+            $messageText = '[Sticker: ' . ($message['sticker']['emoji'] ?? '😊') . ']';
+        } elseif (!empty($caption)) {
+            $messageText = $caption;
+        }
+
         $messageId = (int)$message['message_id'];
         $messageDate = isset($message['date']) 
             ? gmdate('Y-m-d H:i:s', (int)$message['date']) 
@@ -541,7 +559,25 @@ class MessageTrackingService
     private function processCandidateReply(array $group, array $member, array $message, string $replyDate): void
     {
         $replyTo = $message['reply_to_message'] ?? null;
-        $messageText = $message['text'] ?? $message['caption'] ?? '';
+        $rawText = $message['text'] ?? '';
+        $caption = $message['caption'] ?? '';
+        $messageText = $rawText;
+
+        if (!empty($message['photo'])) {
+            $messageText = '[Photo' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['voice'])) {
+            $messageText = '[Voice Message' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['video'])) {
+            $messageText = '[Video' . (!empty($caption) ? ': ' . $caption : '') . ']';
+        } elseif (!empty($message['document'])) {
+            $docName = $message['document']['file_name'] ?? 'Document';
+            $messageText = "[Document: {$docName}]" . (!empty($caption) ? ' ' . $caption : '');
+        } elseif (!empty($message['sticker'])) {
+            $messageText = '[Sticker: ' . ($message['sticker']['emoji'] ?? '😊') . ']';
+        } elseif (!empty($caption)) {
+            $messageText = $caption;
+        }
+
         $messageId = (int)$message['message_id'];
         $memberId = (int)$member['id'];
         $userId = (int)$member['telegram_user_id'];

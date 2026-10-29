@@ -225,4 +225,72 @@ class DashboardController
             'total_pending_members' => $totalPendingMembers,
         ];
     }
+
+    /**
+     * Real-time JSON API endpoint for dashboard summary & message stats.
+     */
+    public function liveStats(): void
+    {
+        AuthService::requireLogin();
+        header('Content-Type: application/json');
+
+        $search = trim($_GET['search'] ?? '');
+        $groupId = !empty($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+        $dateFrom = trim($_GET['date_from'] ?? '');
+        $dateTo = trim($_GET['date_to'] ?? '');
+
+        $whereClauses = ["tm.is_active = 1"];
+        $params = [];
+
+        if (!empty($search)) {
+            $whereClauses[] = "(tm.message_text LIKE :search OR tm.reference_code LIKE :search)";
+            $params[':search'] = '%' . $search . '%';
+        }
+
+        if (!empty($groupId)) {
+            $whereClauses[] = "tm.group_id = :gid";
+            $params[':gid'] = $groupId;
+        }
+
+        $appTz = new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'));
+        $utcTz = new DateTimeZone('UTC');
+
+        if (!empty($dateFrom)) {
+            try {
+                $dtFrom = new DateTimeImmutable($dateFrom . ' 00:00:00', $appTz);
+                $whereClauses[] = "tm.message_date >= :date_from";
+                $params[':date_from'] = $dtFrom->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
+        if (!empty($dateTo)) {
+            try {
+                $dtTo = new DateTimeImmutable($dateTo . ' 23:59:59', $appTz);
+                $whereClauses[] = "tm.message_date <= :date_to";
+                $params[':date_to'] = $dtTo->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
+        $whereSql = implode(' AND ', $whereClauses);
+        $summary = $this->calculateFilteredSummaryStats($whereSql, $params);
+
+        // Also fetch live stats for visible message IDs
+        $msgIds = !empty($_GET['message_ids']) ? array_filter(array_map('intval', explode(',', $_GET['message_ids']))) : [];
+        $messageStats = [];
+        if (!empty($msgIds)) {
+            $placeholders = implode(',', array_fill(0, count($msgIds), '?'));
+            $rows = Database::fetchAll("SELECT id, group_id, message_date FROM tracked_messages WHERE id IN ({$placeholders})", $msgIds);
+            foreach ($rows as $r) {
+                $messageStats[$r['id']] = $this->calculateMessageStats((int)$r['id'], (int)$r['group_id'], $r['message_date']);
+            }
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'summary' => $summary,
+            'message_stats' => $messageStats,
+            'synced_at' => format_tz(utc_now(), 'h:i:s A'),
+        ]);
+        exit;
+    }
 }

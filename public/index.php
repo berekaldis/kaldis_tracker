@@ -57,6 +57,9 @@ set_exception_handler(function (\Throwable $e) {
 // 5. Parse Request URI & Method
 $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+if ($requestMethod === 'HEAD') {
+    $requestMethod = 'GET';
+}
 
 // Calculate base script path if installed in subdirectory (e.g. /tgroup/public or /tgroup)
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
@@ -114,6 +117,16 @@ match (true) {
     // Tracked Messages routes
     $path === 'messages/create' && $requestMethod === 'POST' => (new TrackedMessageController())->create(),
     $path === 'messages/view' && $requestMethod === 'GET' => (new TrackedMessageController())->view(),
+    $path === 'messages/confirm-response' && $requestMethod === 'POST' => (new TrackedMessageController())->confirmResponse(),
+    $path === 'messages/reject-response' && $requestMethod === 'POST' => (new TrackedMessageController())->rejectResponse(),
+    $path === 'messages/exclude-member' && $requestMethod === 'POST' => (new TrackedMessageController())->excludeMember(),
+    $path === 'messages/include-member' && $requestMethod === 'POST' => (new TrackedMessageController())->includeMember(),
+    $path === 'messages/manual-reply' && $requestMethod === 'POST' => (new TrackedMessageController())->manualMarkReplied(),
+    $path === 'messages/export' && $requestMethod === 'GET' => (new TrackedMessageController())->exportCsv(),
+
+    // Real-Time Live API routes
+    $path === 'api/dashboard/live-stats' && $requestMethod === 'GET' => (new DashboardController())->liveStats(),
+    $path === 'api/messages/live-details' && $requestMethod === 'GET' => (new TrackedMessageController())->liveDetails(),
 
     // Super Admin: Bot Configuration & Admin Management routes
     $path === 'settings/bot' && $requestMethod === 'GET' => (new SettingsController())->botConfig(),

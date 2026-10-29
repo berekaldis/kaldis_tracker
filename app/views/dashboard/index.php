@@ -22,13 +22,19 @@ $isOwner = AuthService::isOwner();
             <?php endif; ?>
         </p>
     </div>
-    <div class="col-md-5 text-md-end mt-3 mt-md-0">
+    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex flex-wrap align-items-center justify-content-md-end gap-2">
+        <!-- Live Sync Pill -->
+        <div class="d-inline-flex align-items-center bg-white px-3 py-1 rounded-pill border shadow-sm small">
+            <span class="pulse-dot"></span>
+            <span class="fw-semibold text-dark me-2">Live Updates</span>
+            <span id="dashSyncTime" class="text-muted" style="font-size: 0.75rem;">Just now</span>
+        </div>
         <?php if ($isOwner): ?>
-            <button type="button" class="btn btn-kaldis shadow-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
+            <button type="button" class="btn btn-kaldis shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
                 <i class="bi bi-pin-angle me-1"></i> Track Message
             </button>
         <?php endif; ?>
-        <a href="<?= url('groups') ?>" class="btn btn-outline-secondary ms-2 shadow-sm">
+        <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
             <i class="bi bi-people me-1"></i> Manage Groups
         </a>
     </div>
@@ -44,7 +50,7 @@ $isOwner = AuthService::isOwner();
                 </div>
                 <div>
                     <div class="stat-label">Total Messages</div>
-                    <div class="stat-value text-dark"><?= number_format($summary['total_messages']) ?></div>
+                    <div class="stat-value text-dark" id="dashTotalMessages"><?= number_format($summary['total_messages']) ?></div>
                 </div>
             </div>
             <div class="text-muted small mt-2">
@@ -61,7 +67,7 @@ $isOwner = AuthService::isOwner();
                 </div>
                 <div>
                     <div class="stat-label">With Replies</div>
-                    <div class="stat-value text-success"><?= number_format($summary['messages_with_replies']) ?></div>
+                    <div class="stat-value text-success" id="dashWithReplies"><?= number_format($summary['messages_with_replies']) ?></div>
                 </div>
             </div>
             <div class="text-muted small mt-2">
@@ -78,7 +84,7 @@ $isOwner = AuthService::isOwner();
                 </div>
                 <div>
                     <div class="stat-label">Without Replies</div>
-                    <div class="stat-value text-danger"><?= number_format($summary['messages_without_replies']) ?></div>
+                    <div class="stat-value text-danger" id="dashWithoutReplies"><?= number_format($summary['messages_without_replies']) ?></div>
                 </div>
             </div>
             <div class="text-muted small mt-2">
@@ -95,7 +101,7 @@ $isOwner = AuthService::isOwner();
                 </div>
                 <div>
                     <div class="stat-label">Total Pending Members</div>
-                    <div class="stat-value text-warning"><?= number_format($summary['total_pending_members']) ?></div>
+                    <div class="stat-value text-warning" id="dashPendingMembers"><?= number_format($summary['total_pending_members']) ?></div>
                 </div>
             </div>
             <div class="text-muted small mt-2">
@@ -201,7 +207,7 @@ $isOwner = AuthService::isOwner();
                             $pct = $stats['percentage'];
                             $pctColor = $pct >= 80 ? 'success' : ($pct >= 40 ? 'warning' : 'danger');
                         ?>
-                        <tr>
+                        <tr id="dashRow_<?= $msg['id'] ?>" data-msg-id="<?= $msg['id'] ?>">
                             <td>
                                 <div class="fw-semibold small"><?= format_tz($msg['message_date'], 'M j, Y') ?></div>
                                 <div class="text-muted small"><?= format_tz($msg['message_date'], 'h:i:s A') ?></div>
@@ -229,20 +235,20 @@ $isOwner = AuthService::isOwner();
                                     </span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-center fw-semibold">
+                            <td class="text-center fw-semibold" id="dashEligible_<?= $msg['id'] ?>">
                                 <?= $stats['eligible'] ?>
                             </td>
                             <td class="text-center">
-                                <span class="badge badge-status-replied px-2 py-1">
+                                <span class="badge badge-status-replied px-2 py-1" id="dashReplied_<?= $msg['id'] ?>">
                                     <?= $stats['replied'] ?>
                                 </span>
                             </td>
                             <td class="text-center">
-                                <span class="badge badge-status-not_replied px-2 py-1">
+                                <span class="badge badge-status-not_replied px-2 py-1" id="dashNotReplied_<?= $msg['id'] ?>">
                                     <?= $stats['not_replied'] ?>
                                 </span>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center" id="dashUnknown_<?= $msg['id'] ?>">
                                 <?php if ($stats['pending_review'] > 0): ?>
                                     <span class="badge badge-status-pending_review me-1" title="Pending Review">
                                         <?= $stats['pending_review'] ?> review
@@ -260,9 +266,9 @@ $isOwner = AuthService::isOwner();
                             <td class="text-center">
                                 <div class="d-flex align-items-center justify-content-center gap-2">
                                     <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
-                                        <div class="progress-bar bg-<?= $pctColor ?>" role="progressbar" style="width: <?= $pct ?>%"></div>
+                                        <div class="progress-bar bg-<?= $pctColor ?>" id="dashBar_<?= $msg['id'] ?>" role="progressbar" style="width: <?= $pct ?>%"></div>
                                     </div>
-                                    <span class="fw-bold small text-<?= $pctColor ?>"><?= $pct ?>%</span>
+                                    <span class="fw-bold small text-<?= $pctColor ?>" id="dashPct_<?= $msg['id'] ?>"><?= $pct ?>%</span>
                                 </div>
                             </td>
                             <td class="text-end">
@@ -363,3 +369,79 @@ $isOwner = AuthService::isOwner();
     </div>
 </div>
 <?php endif; ?>
+
+<script>
+// Dashboard Real-Time Live Sync
+(function() {
+    const liveStatsBaseUrl = '<?= url("api/dashboard/live-stats") ?>';
+    const searchVal = '<?= addslashes($filters["search"]) ?>';
+    const groupVal = '<?= $filters["group_id"] ?? "" ?>';
+    const dateFromVal = '<?= addslashes($filters["date_from"]) ?>';
+    const dateToVal = '<?= addslashes($filters["date_to"]) ?>';
+
+    async function pollDashboardLive() {
+        const rows = document.querySelectorAll('tr[data-msg-id]');
+        const msgIds = Array.from(rows).map(r => r.getAttribute('data-msg-id')).join(',');
+
+        let url = `${liveStatsBaseUrl}?search=${encodeURIComponent(searchVal)}&group_id=${encodeURIComponent(groupVal)}&date_from=${encodeURIComponent(dateFromVal)}&date_to=${encodeURIComponent(dateToVal)}&message_ids=${encodeURIComponent(msgIds)}`;
+
+        try {
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data.ok) return;
+
+            // 1. Update Sync Time
+            const syncEl = document.getElementById('dashSyncTime');
+            if (syncEl) syncEl.innerText = data.synced_at || 'Just now';
+
+            // 2. Update 4 Summary Cards
+            const s = data.summary;
+            const totEl = document.getElementById('dashTotalMessages');
+            const wRepEl = document.getElementById('dashWithReplies');
+            const woRepEl = document.getElementById('dashWithoutReplies');
+            const pendEl = document.getElementById('dashPendingMembers');
+
+            if (totEl && s.total_messages !== undefined) totEl.innerText = Number(s.total_messages).toLocaleString();
+            if (wRepEl && s.messages_with_replies !== undefined) wRepEl.innerText = Number(s.messages_with_replies).toLocaleString();
+            if (woRepEl && s.messages_without_replies !== undefined) woRepEl.innerText = Number(s.messages_without_replies).toLocaleString();
+            if (pendEl && s.total_pending_members !== undefined) pendEl.innerText = Number(s.total_pending_members).toLocaleString();
+
+            // 3. Update Individual Message Rows
+            if (data.message_stats) {
+                for (const [mid, st] of Object.entries(data.message_stats)) {
+                    const repEl = document.getElementById('dashReplied_' + mid);
+                    const notRepEl = document.getElementById('dashNotReplied_' + mid);
+                    const barEl = document.getElementById('dashBar_' + mid);
+                    const pctEl = document.getElementById('dashPct_' + mid);
+
+                    if (repEl && repEl.innerText !== String(st.replied)) {
+                        repEl.innerText = st.replied;
+                        const row = document.getElementById('dashRow_' + mid);
+                        if (row) {
+                            row.classList.add('row-highlight-new');
+                            setTimeout(() => row.classList.remove('row-highlight-new'), 2500);
+                        }
+                    }
+
+                    if (notRepEl) notRepEl.innerText = st.not_replied;
+
+                    if (barEl && pctEl) {
+                        const pct = st.percentage;
+                        const pctColor = pct >= 80 ? 'success' : (pct >= 40 ? 'warning' : 'danger');
+                        barEl.style.width = pct + '%';
+                        barEl.className = 'progress-bar bg-' + pctColor;
+                        pctEl.innerText = pct + '%';
+                        pctEl.className = 'fw-bold small text-' + pctColor;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Dashboard live sync poll error:', e);
+        }
+    }
+
+    // Poll every 4 seconds
+    setInterval(pollDashboardLive, 4000);
+})();
+</script>
