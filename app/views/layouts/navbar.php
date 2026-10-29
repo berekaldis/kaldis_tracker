@@ -7,7 +7,7 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? '';
 <nav class="navbar navbar-expand-lg navbar-dark navbar-kaldis">
     <div class="container-fluid px-lg-4">
         <a class="navbar-brand d-flex align-items-center" href="<?= url('dashboard') ?>">
-            <span class="fs-4 me-2">☕</span>
+            <img src="<?= url('assets/img/kaldis-logo.jpg') ?>" alt="Kaldis Logo" class="rounded-circle me-2 border border-warning" style="width: 32px; height: 32px; object-fit: cover;">
             <span>Kaldis <span class="accent">Tracker</span></span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In &bull; Kaldis Coffee Telegram Tracker</title>
+    <link rel="icon" type="image/jpeg" href="<?= url('assets/img/kaldis-logo.jpg') ?>">
+    <link rel="apple-touch-icon" href="<?= url('assets/img/kaldis-logo.jpg') ?>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="<?= url('assets/css/app.css') ?>">
@@ -36,7 +38,7 @@
 <body>
     <div class="login-card">
         <div class="login-header">
-            <div class="display-5 mb-2">☕</div>
+            <img src="<?= url('assets/img/kaldis-logo.jpg') ?>" alt="Kaldis Coffee Logo" class="rounded-circle shadow mb-3" style="width: 82px; height: 82px; object-fit: cover; border: 3px solid #c8963e;">
             <h4 class="mb-1 fw-bold">Kaldis Coffee</h4>
             <div class="text-white-50 small">Telegram Reply Tracker (v2)</div>
         </div>

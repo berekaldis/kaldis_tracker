@@ -617,7 +617,7 @@ class MessageTrackingService
 
                 // Direct reply to our tracked message!
                 // Rule 8: Do not count messages sent before the tracked message
-                if ($replyDate > $tracked['message_date']) {
+                if ($replyDate >= $tracked['message_date']) {
                     $this->recordResponse(
                         (int)$tracked['id'],
                         $memberId,

@@ -14,7 +14,7 @@ if (!function_exists('config')) {
         $dbVal = \App\Services\SettingService::get($dbKey);
         if ($dbVal !== null && $dbVal !== '') {
             if ($key === 'telegram.authorized_user_ids' && is_string($dbVal)) {
-                return array_filter(array_map('trim', explode(',', $dbVal)));
+                return array_values(array_filter(array_map('trim', explode(',', $dbVal))));
             }
             if ($key === 'telegram.track_all_messages') {
                 return (bool)(int)$dbVal;

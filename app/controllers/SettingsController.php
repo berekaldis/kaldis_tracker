@@ -25,7 +25,22 @@ class SettingsController
         }
 
         $authUsers = config('telegram.authorized_user_ids', []);
-        $authUsersStr = is_array($authUsers) ? implode(', ', $authUsers) : (string)$authUsers;
+        $authUsersList = is_array($authUsers) ? $authUsers : array_filter(array_map('trim', explode(',', (string)$authUsers)));
+        $authUsersList = array_values(array_unique(array_filter(array_map('strval', $authUsersList))));
+        $authUsersStr = implode(', ', $authUsersList);
+
+        // Fetch known group members to assist in adding authorized senders
+        $knownMembers = Database::fetchAll(
+            "SELECT id, telegram_user_id, full_name, username, is_bot 
+             FROM members 
+             WHERE is_bot = 0 
+             ORDER BY updated_at DESC LIMIT 50"
+        );
+        $membersMap = [];
+        foreach ($knownMembers as $m) {
+            $membersMap[(string)$m['telegram_user_id']] = $m;
+        }
+
         $trackingMode = (string)config('telegram.tracking_mode', 'all_authorized');
         $trackAllMessages = (bool)config('telegram.track_all_messages', true);
         $trackHashtag = config('telegram.track_hashtag', '#track');
@@ -46,6 +61,9 @@ class SettingsController
             'webhookSecret' => $webhookSecret,
             'webhookUrl' => $webhookUrl,
             'authUsersStr' => $authUsersStr,
+            'authUsersList' => $authUsersList,
+            'knownMembers' => $knownMembers,
+            'membersMap' => $membersMap,
             'trackingMode' => $trackingMode,
             'trackAllMessages' => $trackAllMessages,
             'trackHashtag' => $trackHashtag,
@@ -68,7 +86,19 @@ class SettingsController
         $botUsername = trim(ltrim($_POST['bot_username'] ?? '', '@'));
         $webhookSecret = trim($_POST['webhook_secret'] ?? '');
         $webhookUrl = trim($_POST['webhook_url'] ?? '');
-        $authorizedUserIds = trim($_POST['authorized_user_ids'] ?? '');
+
+        // Sanitize and normalize multiple authorized sender Telegram user IDs
+        $authorizedUserIdsInput = trim($_POST['authorized_user_ids'] ?? '');
+        $rawIds = preg_split('/[\s,]+/', $authorizedUserIdsInput, -1, PREG_SPLIT_NO_EMPTY);
+        $cleanIds = [];
+        foreach ($rawIds as $id) {
+            $cleanId = trim($id);
+            if (preg_match('/^-?\d+$/', $cleanId)) {
+                $cleanIds[] = $cleanId;
+            }
+        }
+        $cleanIds = array_values(array_unique($cleanIds));
+        $authorizedUserIds = implode(', ', $cleanIds);
         $trackingMode = trim($_POST['tracking_mode'] ?? 'all_authorized');
         if (!in_array($trackingMode, ['all_authorized', 'all_messages', 'trigger_only'])) {
             $trackingMode = 'all_authorized';

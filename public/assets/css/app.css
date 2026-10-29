@@ -59,6 +59,27 @@ body {
     font-size: 1.6rem;
 }
 
+.sidebar-brand .brand-logo-img {
+    width: 38px;
+    height: 38px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid var(--kaldis-accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* Authorized Sender Badges & Chips */
+.authorized-chip {
+    background-color: #ffffff !important;
+    border: 1px solid var(--kaldis-card-border) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.authorized-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+}
+
 .sidebar-brand .brand-title {
     font-weight: 700;
     font-size: 1.15rem;

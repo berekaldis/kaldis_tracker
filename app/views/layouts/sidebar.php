@@ -20,7 +20,7 @@ $roleBadgeClass = match($user['role'] ?? '') {
     <!-- Brand Header -->
     <div class="sidebar-brand">
         <a href="<?= url('dashboard') ?>" class="d-flex align-items-center text-decoration-none">
-            <span class="brand-icon me-2">☕</span>
+            <img src="<?= url('assets/img/kaldis-logo.jpg') ?>" alt="Kaldis Logo" class="brand-logo-img me-2">
             <div class="brand-text">
                 <span class="brand-title">Kaldis <span class="accent">Tracker</span></span>
                 <span class="badge bg-amber-subtle text-amber border border-amber-subtle ms-1" style="font-size: 0.65rem;">v2.0</span>
