@@ -1,7 +1,7 @@
 <div class="row align-items-center mb-4">
     <div class="col-md-7">
         <h3 class="fw-bold mb-1" style="color: var(--kaldis-primary);">Admin User Management</h3>
-        <p class="text-muted small mb-0">Manage system administrators, roles, and access permissions.</p>
+        <p class="text-muted small mb-0">Manage system administrators, department isolation, roles, and access permissions.</p>
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0">
         <button type="button" class="btn btn-kaldis shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreateAdmin">
@@ -17,6 +17,7 @@
                 <tr>
                     <th>Admin User</th>
                     <th>Email Address</th>
+                    <th>Department Scope</th>
                     <th class="text-center">Role</th>
                     <th class="text-center">Status</th>
                     <th>Last Login (EAT)</th>
@@ -33,6 +34,20 @@
                         </td>
                         <td>
                             <span class="text-dark small"><?= e($a['email']) ?></span>
+                        </td>
+                        <td>
+                            <?php if (!empty($a['department']) && strcasecmp($a['department'], 'all') !== 0): ?>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                    <i class="bi bi-building me-1"></i><?= e($a['department']) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-globe me-1 text-muted"></i>All Departments
+                                </span>
+                            <?php endif; ?>
+                            <button type="button" class="btn btn-sm btn-link p-0 text-muted ms-1" title="Change Department" onclick="openAdminDeptModal(<?= (int)$a['id'] ?>, '<?= e(addslashes($a['username'])) ?>', '<?= e(addslashes($a['department'] ?? 'All')) ?>')">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
                         </td>
                         <td class="text-center">
                             <?php if ($a['role'] === 'super_admin'): ?>
@@ -95,12 +110,12 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Username <span class="text-danger">*</span></label>
-                    <input type="text" name="username" class="form-control" required placeholder="e.g. jdoe">
+                    <input type="text" name="username" class="form-control" required placeholder="e.g. it_manager">
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Email Address <span class="text-danger">*</span></label>
-                    <input type="email" name="email" class="form-control" required placeholder="e.g. jdoe@kaldiscoffee.com">
+                    <input type="email" name="email" class="form-control" required placeholder="e.g. it_manager@kaldiscoffee.com">
                 </div>
 
                 <div class="mb-3">
@@ -109,10 +124,25 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label small fw-semibold">Department Scope <span class="text-danger">*</span></label>
+                    <select name="department" class="form-select" required>
+                        <option value="All" selected>All Departments (Corporate / Company-wide)</option>
+                        <option value="IT">IT (Information Technology) - View only IT Groups</option>
+                        <option value="Operations">Operations &amp; Branches</option>
+                        <option value="Supply Chain">Supply Chain &amp; Roastery</option>
+                        <option value="Finance">Finance &amp; Accounting</option>
+                        <option value="Quality & Barista">Quality Assurance &amp; Baristas</option>
+                        <option value="HR & Admin">HR &amp; Administration</option>
+                        <option value="Marketing">Marketing &amp; Sales</option>
+                    </select>
+                    <div class="form-text small">If a specific department is chosen, this user will only see conversations and groups for that department.</div>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label small fw-semibold">Role &amp; Permissions <span class="text-danger">*</span></label>
                     <select name="role" class="form-select" required>
                         <option value="viewer">Viewer (Read-only reports &amp; dashboard)</option>
-                        <option value="owner">Owner (Manage groups, track messages, health checks)</option>
+                        <option value="owner" selected>Owner (Manage groups, track messages, health checks)</option>
                         <option value="super_admin">Super Admin (Full access: Bot configuration, admins, groups, system)</option>
                     </select>
                 </div>
@@ -126,3 +156,58 @@
         </form>
     </div>
 </div>
+
+<!-- Modal: Edit Admin Department -->
+<div class="modal fade" id="modalEditAdminDept" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="<?= url('settings/admins/update-department') ?>" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="admin_id" id="editAdminId" value="">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-building text-primary me-2"></i> Update Admin Department Scope
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Administrator</label>
+                    <input type="text" id="editAdminUsername" class="form-control bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Assigned Department</label>
+                    <select name="department" id="editAdminDeptSelect" class="form-select" required>
+                        <option value="All">All Departments (Corporate / Company-wide)</option>
+                        <option value="IT">IT (Information Technology)</option>
+                        <option value="Operations">Operations &amp; Branches</option>
+                        <option value="Supply Chain">Supply Chain &amp; Roastery</option>
+                        <option value="Finance">Finance &amp; Accounting</option>
+                        <option value="Quality & Barista">Quality Assurance &amp; Baristas</option>
+                        <option value="HR & Admin">HR &amp; Administration</option>
+                        <option value="Marketing">Marketing &amp; Sales</option>
+                    </select>
+                    <div class="form-text small">Users restricted to a department cannot view conversations or groups of any other department.</div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-kaldis btn-sm">
+                    <i class="bi bi-check2 me-1"></i> Save Department Scope
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAdminDeptModal(adminId, username, currentDept) {
+    document.getElementById('editAdminId').value = adminId;
+    document.getElementById('editAdminUsername').value = username;
+    const select = document.getElementById('editAdminDeptSelect');
+    if (select) {
+        select.value = (currentDept && currentDept !== '') ? currentDept : 'All';
+    }
+    const modal = new bootstrap.Modal(document.getElementById('modalEditAdminDept'));
+    modal.show();
+}
+</script>

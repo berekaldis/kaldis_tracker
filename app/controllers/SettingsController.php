@@ -215,8 +215,17 @@ class SettingsController
         AuthService::requireSuperAdmin();
 
         $admins = Database::fetchAll("SELECT * FROM admins ORDER BY created_at ASC");
+        $standardDepartments = ['IT', 'Operations', 'Supply Chain', 'Finance', 'Quality & Barista', 'HR & Admin', 'Marketing'];
+        $dbDepts = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != ''");
+        foreach ($dbDepts as $d) {
+            if (!in_array($d['department'], $standardDepartments)) {
+                $standardDepartments[] = $d['department'];
+            }
+        }
+
         view('settings.admins', [
             'admins' => $admins,
+            'departments' => $standardDepartments,
             'pageTitle' => 'Admin Users Management',
         ]);
     }
@@ -233,6 +242,8 @@ class SettingsController
         $email = trim($_POST['email'] ?? '');
         $password = (string)($_POST['password'] ?? '');
         $role = trim($_POST['role'] ?? 'viewer');
+        $department = trim($_POST['department'] ?? '');
+        $deptVal = (empty($department) || strcasecmp($department, 'all') === 0) ? null : $department;
 
         if (empty($username) || empty($email) || empty($password)) {
             flash('danger', 'Please provide Username, Email, and Password.');
@@ -252,13 +263,14 @@ class SettingsController
 
         $now = utc_now();
         Database::execute(
-            "INSERT INTO admins (username, email, password_hash, role, is_active, created_at, updated_at)
-             VALUES (:u, :e, :p, :role, 1, :now1, :now2)",
+            "INSERT INTO admins (username, email, password_hash, role, department, is_active, created_at, updated_at)
+             VALUES (:u, :e, :p, :role, :dept, 1, :now1, :now2)",
             [
                 ':u' => $username,
                 ':e' => $email,
                 ':p' => password_hash($password, PASSWORD_DEFAULT),
                 ':role' => $role,
+                ':dept' => $deptVal,
                 ':now1' => $now,
                 ':now2' => $now,
             ]
@@ -268,10 +280,47 @@ class SettingsController
         AuditService::log('admin_user_created', 'admin', (string)$newId, [
             'username' => $username,
             'role' => $role,
+            'department' => $deptVal ?? 'All Departments',
             'email' => $email
         ]);
 
-        flash('success', "New administrator '{$username}' ({$role}) created successfully!");
+        $deptLabel = $deptVal ? " for {$deptVal} Department" : " (Company-wide)";
+        flash('success', "New administrator '{$username}' ({$role}){$deptLabel} created successfully!");
+        redirect(url('settings/admins'));
+    }
+
+    /**
+     * Update an Admin User's Department assignment.
+     */
+    public function updateAdminDepartment(): void
+    {
+        AuthService::requireSuperAdmin();
+        AuthService::verifyCsrf();
+
+        $adminId = (int)($_POST['admin_id'] ?? 0);
+        $department = trim($_POST['department'] ?? '');
+        $deptVal = (empty($department) || strcasecmp($department, 'all') === 0) ? null : $department;
+
+        $admin = Database::fetch("SELECT * FROM admins WHERE id = :id", [':id' => $adminId]);
+        if (!$admin) {
+            flash('danger', 'Admin user not found.');
+            redirect(url('settings/admins'));
+        }
+
+        Database::execute("UPDATE admins SET department = :dept, updated_at = :now WHERE id = :id", [
+            ':dept' => $deptVal,
+            ':now' => utc_now(),
+            ':id' => $adminId,
+        ]);
+
+        AuditService::log('admin_department_updated', 'admin', (string)$adminId, [
+            'username' => $admin['username'],
+            'old_department' => $admin['department'] ?? 'All Departments',
+            'new_department' => $deptVal ?? 'All Departments',
+        ]);
+
+        $deptLabel = $deptVal ?? 'All Departments (Company-wide)';
+        flash('success', "Department assignment for '{$admin['username']}' updated to '{$deptLabel}'.");
         redirect(url('settings/admins'));
     }
 

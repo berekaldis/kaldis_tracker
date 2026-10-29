@@ -123,33 +123,50 @@ $isOwner = AuthService::isOwner();
                 </div>
             </div>
 
-            <div class="col-md-3">
+            <?php if (!empty($userDept)): ?>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">Department</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-primary-subtle text-primary border-primary-subtle"><i class="bi bi-building"></i></span>
+                        <input type="text" class="form-control bg-light fw-bold text-primary" value="<?= e($userDept) ?>" readonly>
+                    </div>
+                </div>
+                <div class="col-md-3">
+            <?php else: ?>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">Department</label>
+                    <select name="department" class="form-select form-select-sm">
+                        <option value="">All Departments</option>
+                        <?php foreach ($departments as $d): ?>
+                            <option value="<?= e($d) ?>" <?= ($selectedDepartment === $d) ? 'selected' : '' ?>>
+                                <?= e($d) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+            <?php endif; ?>
                 <label class="form-label small fw-semibold text-muted mb-1">Telegram Group</label>
                 <select name="group_id" class="form-select form-select-sm">
-                    <option value="">All Registered Groups</option>
+                    <option value="">All Accessible Groups</option>
                     <?php foreach ($groups as $g): ?>
                         <option value="<?= $g['id'] ?>" <?= $filters['group_id'] == $g['id'] ? 'selected' : '' ?>>
-                            <?= e($g['title']) ?> (<?= e($g['telegram_chat_id']) ?>)
+                            <?= e($g['title']) ?> [<?= e($g['department'] ?? 'General') ?>]
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
             <div class="col-md-2">
-                <label class="form-label small fw-semibold text-muted mb-1">Date From (Addis Time)</label>
+                <label class="form-label small fw-semibold text-muted mb-1">Date From</label>
                 <input type="date" name="date_from" class="form-control form-control-sm" value="<?= e($filters['date_from']) ?>">
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold text-muted mb-1">Date To (Addis Time)</label>
-                <input type="date" name="date_to" class="form-control form-control-sm" value="<?= e($filters['date_to']) ?>">
             </div>
 
             <div class="col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-sm btn-dark flex-grow-1">
                     <i class="bi bi-funnel me-1"></i> Filter
                 </button>
-                <?php if (!empty($filters['search']) || !empty($filters['group_id']) || !empty($filters['date_from']) || !empty($filters['date_to'])): ?>
+                <?php if (!empty($filters['search']) || !empty($filters['group_id']) || !empty($filters['date_from']) || !empty($filters['date_to']) || (!empty($selectedDepartment) && empty($userDept))): ?>
                     <a href="<?= url('dashboard') ?>" class="btn btn-sm btn-outline-secondary" title="Reset Filters">
                         <i class="bi bi-x-lg"></i>
                     </a>

@@ -110,6 +110,7 @@ match (true) {
     // Groups routes
     $path === 'groups' && $requestMethod === 'GET' => (new GroupController())->index(),
     $path === 'groups/register' && $requestMethod === 'POST' => (new GroupController())->register(),
+    $path === 'groups/update-department' && $requestMethod === 'POST' => (new GroupController())->updateDepartment(),
     $path === 'groups/toggle-active' && $requestMethod === 'POST' => (new GroupController())->toggleActive(),
     $path === 'groups/health-check' && $requestMethod === 'POST' => (new GroupController())->healthCheck(),
     $path === 'groups/view' && $requestMethod === 'GET' => (new GroupController())->view(),
@@ -135,6 +136,7 @@ match (true) {
     $path === 'settings/delete-webhook' && $requestMethod === 'POST' => (new SettingsController())->deleteWebhook(),
     $path === 'settings/admins' && $requestMethod === 'GET' => (new SettingsController())->admins(),
     $path === 'settings/admins/create' && $requestMethod === 'POST' => (new SettingsController())->createAdmin(),
+    $path === 'settings/admins/update-department' && $requestMethod === 'POST' => (new SettingsController())->updateAdminDepartment(),
     $path === 'settings/admins/toggle' && $requestMethod === 'POST' => (new SettingsController())->toggleAdminStatus(),
 
     // Audit logs

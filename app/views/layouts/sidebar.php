@@ -42,6 +42,11 @@ $roleBadgeClass = match($user['role'] ?? '') {
                 <?php if ($isSuperAdmin): ?><i class="bi bi-shield-lock-fill me-1"></i><?php endif; ?>
                 <?= $roleLabel ?>
             </span>
+            <?php if (!empty($user['department']) && strcasecmp($user['department'], 'all') !== 0): ?>
+                <span class="badge bg-info-subtle text-info border border-info-subtle ms-1" style="font-size: 0.62rem;" title="Department Restriced Access">
+                    <i class="bi bi-building me-1"></i><?= e($user['department']) ?>
+                </span>
+            <?php endif; ?>
         </div>
     </div>
 

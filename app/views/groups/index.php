@@ -1,13 +1,24 @@
 <?php
 use App\Services\AuthService;
 $isOwner = AuthService::isOwner();
+$isSuperAdmin = AuthService::isSuperAdmin();
 ?>
 <div class="row align-items-center mb-4">
     <div class="col-md-7">
         <h3 class="fw-bold mb-1" style="color: var(--kaldis-primary);">Registered Telegram Groups</h3>
-        <p class="text-muted small mb-0">Manage monitored groups, verify bot permissions, and run health checks.</p>
+        <p class="text-muted small mb-0">Manage monitored groups, verify bot permissions, and department assignments.</p>
     </div>
-    <div class="col-md-5 text-md-end mt-3 mt-md-0">
+    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end align-items-center gap-2">
+        <?php if (!empty($userDept)): ?>
+            <span class="badge bg-primary px-3 py-2 shadow-sm">
+                <i class="bi bi-building me-1"></i> <?= e($userDept) ?> Department Groups
+            </span>
+        <?php else: ?>
+            <span class="badge bg-light text-dark border px-3 py-2">
+                <i class="bi bi-globe me-1"></i> All Departments (Company-wide)
+            </span>
+        <?php endif; ?>
+
         <?php if ($isOwner): ?>
             <button type="button" class="btn btn-kaldis shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRegisterGroup">
                 <i class="bi bi-plus-circle me-1"></i> Register New Group
@@ -22,6 +33,7 @@ $isOwner = AuthService::isOwner();
             <thead class="table-light">
                 <tr>
                     <th>Group Title &amp; ID</th>
+                    <th>Department</th>
                     <th class="text-center">Bot Status</th>
                     <th class="text-center">Admin Rights</th>
                     <th class="text-center">Monitoring</th>
@@ -34,9 +46,9 @@ $isOwner = AuthService::isOwner();
             <tbody>
                 <?php if (empty($groups)): ?>
                     <tr>
-                        <td colspan="8" class="text-center py-5 text-muted">
+                        <td colspan="9" class="text-center py-5 text-muted">
                             <i class="bi bi-chat-square-quote fs-1 d-block mb-2 text-secondary"></i>
-                            <div>No Telegram groups registered yet.</div>
+                            <div>No Telegram groups registered for this department yet.</div>
                             <?php if ($isOwner): ?>
                                 <button type="button" class="btn btn-sm btn-kaldis mt-2" data-bs-toggle="modal" data-bs-target="#modalRegisterGroup">
                                     Register First Group
@@ -55,6 +67,16 @@ $isOwner = AuthService::isOwner();
                                         &bull; @<?= e($g['username']) ?>
                                     <?php endif; ?>
                                 </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-amber-subtle text-dark border border-warning" style="font-size: 0.8rem;">
+                                    <i class="bi bi-building me-1 text-primary"></i><?= e($g['department'] ?? 'General') ?>
+                                </span>
+                                <?php if ($isOwner): ?>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted ms-1" title="Change Department" onclick="openDepartmentModal(<?= (int)$g['id'] ?>, '<?= e(addslashes($g['title'])) ?>', '<?= e(addslashes($g['department'] ?? 'General')) ?>')">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                <?php endif; ?>
                             </td>
                             <td class="text-center">
                                 <?php if ($g['bot_status'] === 'active'): ?>
@@ -158,6 +180,26 @@ $isOwner = AuthService::isOwner();
                     </div>
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Assigned Department <span class="text-danger">*</span></label>
+                    <?php if (!empty($userDept)): ?>
+                        <input type="text" name="department" class="form-control" value="<?= e($userDept) ?>" readonly>
+                        <div class="form-text small">Automatically locked to your assigned department (<?= e($userDept) ?>).</div>
+                    <?php else: ?>
+                        <select name="department" class="form-select" required>
+                            <option value="IT">IT (Information Technology)</option>
+                            <option value="Operations">Operations &amp; Branches</option>
+                            <option value="Supply Chain">Supply Chain &amp; Roastery</option>
+                            <option value="Finance">Finance &amp; Accounting</option>
+                            <option value="Quality & Barista">Quality Assurance &amp; Baristas</option>
+                            <option value="HR & Admin">HR &amp; Administration</option>
+                            <option value="Marketing">Marketing &amp; Sales</option>
+                            <option value="General" selected>General / Cross-Departmental</option>
+                        </select>
+                        <div class="form-text small">Select which department this group belongs to.</div>
+                    <?php endif; ?>
+                </div>
+
                 <div class="card bg-light border-0 p-3 small text-muted">
                     <strong>How to find group chat ID:</strong>
                     <ul class="mb-0 ps-3 mt-1">
@@ -175,4 +217,58 @@ $isOwner = AuthService::isOwner();
         </form>
     </div>
 </div>
+
+<!-- Modal: Edit Group Department -->
+<div class="modal fade" id="modalEditDepartment" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="<?= url('groups/update-department') ?>" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="group_id" id="editDeptGroupId" value="">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-building text-primary me-2"></i> Update Group Department
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Group Title</label>
+                    <input type="text" id="editDeptGroupTitle" class="form-control bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Select New Department</label>
+                    <select name="department" id="editDeptSelect" class="form-select" required>
+                        <option value="IT">IT (Information Technology)</option>
+                        <option value="Operations">Operations &amp; Branches</option>
+                        <option value="Supply Chain">Supply Chain &amp; Roastery</option>
+                        <option value="Finance">Finance &amp; Accounting</option>
+                        <option value="Quality & Barista">Quality Assurance &amp; Baristas</option>
+                        <option value="HR & Admin">HR &amp; Administration</option>
+                        <option value="Marketing">Marketing &amp; Sales</option>
+                        <option value="General">General / Cross-Departmental</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-kaldis btn-sm">
+                    <i class="bi bi-check2 me-1"></i> Save Department
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openDepartmentModal(groupId, groupTitle, currentDept) {
+    document.getElementById('editDeptGroupId').value = groupId;
+    document.getElementById('editDeptGroupTitle').value = groupTitle;
+    const select = document.getElementById('editDeptSelect');
+    if (select) {
+        select.value = currentDept;
+    }
+    const modal = new bootstrap.Modal(document.getElementById('modalEditDepartment'));
+    modal.show();
+}
+</script>
 <?php endif; ?>

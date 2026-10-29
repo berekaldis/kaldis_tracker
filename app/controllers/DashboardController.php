@@ -54,14 +54,40 @@ class DashboardController
             } catch (\Exception) {}
         }
 
-        $whereSql = implode(' AND ', $whereClauses);
+        // Department scoping and filtering
+        $userDept = AuthService::userDepartment();
+        $selectedDepartment = null;
 
-        // Fetch groups for filter dropdown
-        $groups = Database::fetchAll("SELECT id, title, telegram_chat_id FROM telegram_groups ORDER BY title ASC");
+        if ($userDept !== null) {
+            // Strict Department Isolation: User can ONLY see their assigned department
+            $whereClauses[] = "tg.department = :user_dept";
+            $params[':user_dept'] = $userDept;
+            $selectedDepartment = $userDept;
+
+            $groups = Database::fetchAll(
+                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE department = :ud ORDER BY title ASC",
+                [':ud' => $userDept]
+            );
+            $departments = [$userDept];
+        } else {
+            // Company-wide / Super Admin: can view all or filter by department
+            $reqDept = trim($_GET['department'] ?? '');
+            if (!empty($reqDept)) {
+                $whereClauses[] = "tg.department = :req_dept";
+                $params[':req_dept'] = $reqDept;
+                $selectedDepartment = $reqDept;
+            }
+
+            $groups = Database::fetchAll("SELECT id, title, telegram_chat_id, department FROM telegram_groups ORDER BY title ASC");
+            $deptRows = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != '' ORDER BY department ASC");
+            $departments = array_column($deptRows, 'department');
+        }
+
+        $whereSql = implode(' AND ', $whereClauses);
 
         // Count total filtered messages
         $totalMessagesCount = (int)Database::fetchColumn(
-            "SELECT COUNT(*) FROM tracked_messages tm WHERE {$whereSql}",
+            "SELECT COUNT(*) FROM tracked_messages tm JOIN telegram_groups tg ON tm.group_id = tg.id WHERE {$whereSql}",
             $params
         );
 
@@ -98,9 +124,13 @@ class DashboardController
             'groups' => $groups,
             'summary' => $summaryCardStats,
             'trackingMode' => (string)config('telegram.tracking_mode', 'all_authorized'),
+            'userDept' => $userDept,
+            'selectedDepartment' => $selectedDepartment,
+            'departments' => $departments,
             'filters' => [
                 'search' => $search,
                 'group_id' => $groupId,
+                'department' => $selectedDepartment,
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
                 'page' => $page,
@@ -190,6 +220,7 @@ class DashboardController
     {
         $sql = "SELECT tm.id, tm.group_id, tm.message_date 
                 FROM tracked_messages tm 
+                JOIN telegram_groups tg ON tm.group_id = tg.id 
                 WHERE {$whereSql}";
         
         $messages = Database::fetchAll($sql, $params);
@@ -242,6 +273,16 @@ class DashboardController
         $whereClauses = ["tm.is_active = 1"];
         $params = [];
 
+        // Apply Department Isolation in API
+        $userDept = AuthService::userDepartment();
+        if ($userDept !== null) {
+            $whereClauses[] = "tg.department = :user_dept";
+            $params[':user_dept'] = $userDept;
+        } elseif (!empty($_GET['department'])) {
+            $whereClauses[] = "tg.department = :req_dept";
+            $params[':req_dept'] = trim($_GET['department']);
+        }
+
         if (!empty($search)) {
             $whereClauses[] = "(tm.message_text LIKE :search OR tm.reference_code LIKE :search)";
             $params[':search'] = '%' . $search . '%';
@@ -274,12 +315,19 @@ class DashboardController
         $whereSql = implode(' AND ', $whereClauses);
         $summary = $this->calculateFilteredSummaryStats($whereSql, $params);
 
-        // Also fetch live stats for visible message IDs
+        // Also fetch live stats for visible message IDs (enforcing department isolation)
         $msgIds = !empty($_GET['message_ids']) ? array_filter(array_map('intval', explode(',', $_GET['message_ids']))) : [];
         $messageStats = [];
         if (!empty($msgIds)) {
             $placeholders = implode(',', array_fill(0, count($msgIds), '?'));
-            $rows = Database::fetchAll("SELECT id, group_id, message_date FROM tracked_messages WHERE id IN ({$placeholders})", $msgIds);
+            $sql = "SELECT tm.id, tm.group_id, tm.message_date 
+                    FROM tracked_messages tm 
+                    JOIN telegram_groups tg ON tm.group_id = tg.id 
+                    WHERE tm.id IN ({$placeholders})";
+            if ($userDept !== null) {
+                $sql .= " AND tg.department = " . Database::pdo()->quote($userDept);
+            }
+            $rows = Database::fetchAll($sql, $msgIds);
             foreach ($rows as $r) {
                 $messageStats[$r['id']] = $this->calculateMessageStats((int)$r['id'], (int)$r['group_id'], $r['message_date']);
             }

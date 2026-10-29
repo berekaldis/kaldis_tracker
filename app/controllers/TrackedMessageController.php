@@ -18,6 +18,8 @@ class TrackedMessageController
         AuthService::requireLogin();
 
         $messageId = (int)($_GET['id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
+
         $message = Database::fetch(
             "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id 
              FROM tracked_messages tm
@@ -168,6 +170,12 @@ class TrackedMessageController
         header('Content-Type: application/json');
 
         $messageId = (int)($_GET['id'] ?? 0);
+        if (!AuthService::canAccessMessage($messageId)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'forbidden', 'message' => 'Access denied: You do not have permission to view conversations outside your department.']);
+            exit;
+        }
+
         $message = Database::fetch(
             "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id 
              FROM tracked_messages tm
@@ -252,6 +260,7 @@ class TrackedMessageController
 
         $responseId = (int)($_POST['response_id'] ?? 0);
         $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
 
         $response = Database::fetch("SELECT * FROM message_responses WHERE id = :id", [':id' => $responseId]);
         if (!$response) {
@@ -287,6 +296,7 @@ class TrackedMessageController
 
         $responseId = (int)($_POST['response_id'] ?? 0);
         $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
 
         $response = Database::fetch("SELECT * FROM message_responses WHERE id = :id", [':id' => $responseId]);
         if (!$response) {
@@ -321,6 +331,7 @@ class TrackedMessageController
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
         $memberId = (int)($_POST['member_id'] ?? 0);
         $telegramUserId = (int)($_POST['telegram_user_id'] ?? 0);
         $reason = trim($_POST['reason'] ?? 'Excluded by administrator');
@@ -375,6 +386,7 @@ class TrackedMessageController
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
         $telegramUserId = (int)($_POST['telegram_user_id'] ?? 0);
 
         Database::execute(
@@ -400,6 +412,7 @@ class TrackedMessageController
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
         $memberId = (int)($_POST['member_id'] ?? 0);
         $telegramUserId = (int)($_POST['telegram_user_id'] ?? 0);
         $note = trim($_POST['note'] ?? 'Confirmed verbally / offline');
@@ -453,6 +466,8 @@ class TrackedMessageController
         AuthService::requireLogin();
 
         $messageId = (int)($_GET['id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
+
         $message = Database::fetch(
             "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id 
              FROM tracked_messages tm

@@ -10,20 +10,39 @@ class GroupController
 {
     /**
      * List all registered groups with health and monitoring status.
+     * Enforces Department Isolation: Department users only see their department's groups.
      */
     public function index(): void
     {
         AuthService::requireLogin();
+
+        $userDept = AuthService::userDepartment();
+        $params = [];
+        $whereSql = '';
+
+        if ($userDept !== null) {
+            $whereSql = "WHERE g.department = :dept";
+            $params[':dept'] = $userDept;
+        }
 
         $groups = Database::fetchAll(
             "SELECT g.*, 
                     (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id AND gm.is_active = 1) AS member_count,
                     (SELECT COUNT(*) FROM tracked_messages tm WHERE tm.group_id = g.id) AS tracked_count
              FROM telegram_groups g
-             ORDER BY g.created_at DESC"
+             {$whereSql}
+             ORDER BY g.created_at DESC",
+            $params
         );
 
-        view('groups.index', ['groups' => $groups]);
+        $deptRows = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != '' ORDER BY department ASC");
+        $departments = array_column($deptRows, 'department');
+
+        view('groups.index', [
+            'groups' => $groups,
+            'userDept' => $userDept,
+            'departments' => $departments,
+        ]);
     }
 
     /**
@@ -88,17 +107,28 @@ class GroupController
             }
         }
 
+        // Department assignment
+        $department = trim($_POST['department'] ?? 'General');
+        if (empty($department)) {
+            $department = 'General';
+        }
+        $userDept = AuthService::userDepartment();
+        if ($userDept !== null) {
+            $department = $userDept; // strictly assign to user's department
+        }
+
         // Insert group
         $now = utc_now();
         Database::execute(
             "INSERT INTO telegram_groups 
-             (telegram_chat_id, title, username, type, is_active, bot_status, bot_is_admin, bot_can_read_all_messages, last_health_check_at, created_at, updated_at)
-             VALUES (:cid, :title, :username, :type, 1, :bot_status, :is_admin, :can_read, :health_at, :created_at, :updated_at)",
+             (telegram_chat_id, title, username, type, department, is_active, bot_status, bot_is_admin, bot_can_read_all_messages, last_health_check_at, created_at, updated_at)
+             VALUES (:cid, :title, :username, :type, :dept, 1, :bot_status, :is_admin, :can_read, :health_at, :created_at, :updated_at)",
             [
                 ':cid' => $chatId,
                 ':title' => $title,
                 ':username' => $username,
                 ':type' => $type,
+                ':dept' => $department,
                 ':bot_status' => $botStatus,
                 ':is_admin' => $botIsAdmin,
                 ':can_read' => $canReadAll,
@@ -113,11 +143,49 @@ class GroupController
         AuditService::log('group_registered', 'group', (string)$groupId, [
             'chat_id' => $chatId,
             'title' => $title,
+            'department' => $department,
             'bot_status' => $botStatus,
             'is_admin' => $botIsAdmin,
         ]);
 
-        flash('success', "Group '{$title}' successfully registered and monitoring activated!");
+        flash('success', "Group '{$title}' successfully registered under '{$department}' department!");
+        redirect(url('groups'));
+    }
+
+    /**
+     * Update a group's assigned department.
+     */
+    public function updateDepartment(): void
+    {
+        AuthService::requireOwner();
+        AuthService::verifyCsrf();
+
+        $groupId = (int)($_POST['group_id'] ?? 0);
+        $department = trim($_POST['department'] ?? 'General');
+        if (empty($department)) {
+            $department = 'General';
+        }
+
+        AuthService::requireGroupAccess($groupId);
+
+        $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+        if (!$group) {
+            flash('danger', 'Group not found.');
+            redirect(url('groups'));
+        }
+
+        Database::execute(
+            "UPDATE telegram_groups SET department = :dept, updated_at = :now WHERE id = :id",
+            [':dept' => $department, ':now' => utc_now(), ':id' => $groupId]
+        );
+
+        AuditService::log('group_department_updated', 'group', (string)$groupId, [
+            'title' => $group['title'],
+            'old_department' => $group['department'] ?? 'General',
+            'new_department' => $department,
+        ]);
+
+        flash('success', "Department for '{$group['title']}' updated to '{$department}'.");
         redirect(url('groups'));
     }
 
@@ -130,6 +198,8 @@ class GroupController
         AuthService::verifyCsrf();
 
         $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
         $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
 
         if (!$group) {
@@ -162,6 +232,8 @@ class GroupController
         AuthService::verifyCsrf();
 
         $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
         $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
 
         if (!$group) {
@@ -240,6 +312,8 @@ class GroupController
         AuthService::requireLogin();
 
         $groupId = (int)($_GET['id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
         $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
 
         if (!$group) {

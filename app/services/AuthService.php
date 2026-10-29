@@ -76,6 +76,95 @@ class AuthService
     }
 
     /**
+     * Get the logged-in user's assigned department, if any.
+     * Returns null for Super Admins or corporate users who can view all departments.
+     */
+    public static function userDepartment(): ?string
+    {
+        $u = self::user();
+        if (!$u || self::isSuperAdmin()) {
+            return null; // Super Admin has unrestricted access to all departments
+        }
+        $dept = trim($u['department'] ?? '');
+        return ($dept === '' || strcasecmp($dept, 'all') === 0) ? null : $dept;
+    }
+
+    /**
+     * Check if the logged-in user is restricted to a specific department.
+     */
+    public static function isDepartmentRestricted(): bool
+    {
+        return self::userDepartment() !== null;
+    }
+
+    /**
+     * Check if user has permission to access a specific Telegram Group by ID.
+     */
+    public static function canAccessGroup(int $groupId): bool
+    {
+        $dept = self::userDepartment();
+        if ($dept === null) {
+            return true;
+        }
+
+        $group = Database::fetch("SELECT department FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+        if (!$group) {
+            return false;
+        }
+
+        return strcasecmp((string)($group['department'] ?? ''), $dept) === 0;
+    }
+
+    /**
+     * Check if user has permission to access a tracked message by message ID.
+     */
+    public static function canAccessMessage(int $messageId): bool
+    {
+        $dept = self::userDepartment();
+        if ($dept === null) {
+            return true;
+        }
+
+        $tracked = Database::fetch(
+            "SELECT tg.department 
+             FROM tracked_messages tm 
+             JOIN telegram_groups tg ON tm.group_id = tg.id 
+             WHERE tm.id = :id",
+            [':id' => $messageId]
+        );
+
+        if (!$tracked) {
+            return false;
+        }
+
+        return strcasecmp((string)($tracked['department'] ?? ''), $dept) === 0;
+    }
+
+    /**
+     * Enforce access to a group; aborts with flash alert if unauthorized.
+     */
+    public static function requireGroupAccess(int $groupId): void
+    {
+        self::requireLogin();
+        if (!self::canAccessGroup($groupId)) {
+            flash('danger', 'Access denied: You do not have permission to view or manage groups outside your department.');
+            redirect(url('dashboard'));
+        }
+    }
+
+    /**
+     * Enforce access to a message; aborts with flash alert if unauthorized.
+     */
+    public static function requireMessageAccess(int $messageId): void
+    {
+        self::requireLogin();
+        if (!self::canAccessMessage($messageId)) {
+            flash('danger', 'Access denied: You do not have permission to view conversations outside your department.');
+            redirect(url('dashboard'));
+        }
+    }
+
+    /**
      * Require super_admin role for privileged configuration actions.
      */
     public static function requireSuperAdmin(): void
@@ -163,6 +252,7 @@ class AuthService
             'username' => $user['username'],
             'email' => $user['email'],
             'role' => $user['role'],
+            'department' => $user['department'] ?? null,
         ];
         $_SESSION['last_activity'] = time();
 
