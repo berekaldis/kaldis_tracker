@@ -140,15 +140,23 @@ class GroupController
 
         $groupId = (int)Database::lastInsertId();
 
+        // Automatically sync group administrators upon registration
+        $syncedAdmins = self::syncGroupAdministrators($groupId, $chatId);
+
         AuditService::log('group_registered', 'group', (string)$groupId, [
             'chat_id' => $chatId,
             'title' => $title,
             'department' => $department,
             'bot_status' => $botStatus,
             'is_admin' => $botIsAdmin,
+            'synced_admins' => $syncedAdmins,
         ]);
 
-        flash('success', "Group '{$title}' successfully registered under '{$department}' department!");
+        $successMsg = "Group '{$title}' successfully registered under '{$department}' department!";
+        if ($syncedAdmins > 0) {
+            $successMsg .= " Automatically imported {$syncedAdmins} administrator(s) from Telegram.";
+        }
+        flash('success', $successMsg);
         redirect(url('groups'));
     }
 
@@ -294,13 +302,18 @@ class GroupController
             ]
         );
 
+        // Also sync administrators during health check
+        $syncedAdmins = self::syncGroupAdministrators($groupId, $group['telegram_chat_id']);
+
         AuditService::log('group_health_checked', 'group', (string)$groupId, [
             'bot_status' => $botStatus,
             'is_admin' => $botIsAdmin,
-            'can_read_all' => $canReadAll
+            'can_read_all' => $canReadAll,
+            'synced_admins' => $syncedAdmins,
         ]);
 
-        flash('success', "Health check completed for '{$title}'. Bot Status: {$botStatus}, Admin: " . ($botIsAdmin ? 'Yes' : 'No'));
+        $adminNote = ($syncedAdmins > 0) ? ", Synced Admins: {$syncedAdmins}" : '';
+        flash('success', "Health check completed for '{$title}'. Bot Status: {$botStatus}, Admin: " . ($botIsAdmin ? 'Yes' : 'No') . $adminNote);
         redirect(url('groups'));
     }
 
@@ -321,6 +334,17 @@ class GroupController
             redirect(url('groups'));
         }
 
+        // Fetch live member count from Telegram API
+        $telegramTotalMembers = null;
+        $botToken = config('telegram.bot_token', '');
+        if (!empty($botToken)) {
+            $tg = new TelegramService($botToken);
+            $countRes = $tg->getChatMemberCount($group['telegram_chat_id']);
+            if (!empty($countRes['ok'])) {
+                $telegramTotalMembers = (int)$countRes['result'];
+            }
+        }
+
         $members = Database::fetchAll(
             "SELECT m.*, gm.role, gm.joined_at, gm.left_at, gm.source, gm.is_active AS membership_active
              FROM group_members gm
@@ -333,6 +357,191 @@ class GroupController
         view('groups.view', [
             'group' => $group,
             'members' => $members,
+            'telegramTotalMembers' => $telegramTotalMembers,
         ]);
+    }
+
+    /**
+     * Synchronize Group Administrators and Creators from Telegram API.
+     */
+    public function syncAdmins(): void
+    {
+        AuthService::requireOwner();
+        AuthService::verifyCsrf();
+
+        $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
+        $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+        if (!$group) {
+            flash('danger', 'Group not found.');
+            redirect(url('groups'));
+        }
+
+        $synced = self::syncGroupAdministrators($groupId, $group['telegram_chat_id']);
+
+        AuditService::log('group_admins_synced', 'group', (string)$groupId, [
+            'group_title' => $group['title'],
+            'admins_synced' => $synced,
+        ]);
+
+        if ($synced > 0) {
+            flash('success', "Successfully synced {$synced} administrator(s) / manager(s) from Telegram for '{$group['title']}'!");
+        } else {
+            flash('info', "Group administrators are already up to date with Telegram.");
+        }
+
+        $redirectUrl = !empty($_POST['redirect_to_view']) ? url('groups/view?id=' . $groupId) : url('groups');
+        redirect($redirectUrl);
+    }
+
+    /**
+     * Manually add a member into a group roster.
+     */
+    public function addMember(): void
+    {
+        AuthService::requireOwner();
+        AuthService::verifyCsrf();
+
+        $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
+        $telegramUserId = trim($_POST['telegram_user_id'] ?? '');
+        $fullName = trim($_POST['full_name'] ?? '');
+        $username = trim(ltrim($_POST['username'] ?? '', '@'));
+
+        if (empty($telegramUserId) || !preg_match('/^-?\d+$/', $telegramUserId)) {
+            flash('danger', 'Please enter a valid numeric Telegram User ID.');
+            redirect(url('groups/view?id=' . $groupId));
+        }
+
+        if (empty($fullName)) {
+            $fullName = !empty($username) ? $username : 'Member ' . $telegramUserId;
+        }
+
+        $now = utc_now();
+        $userId = (int)$telegramUserId;
+
+        Database::execute(
+            "INSERT INTO members (telegram_user_id, full_name, username, is_bot, created_at, updated_at)
+             VALUES (:uid, :name, :uname, 0, :now1, :now2)
+             ON DUPLICATE KEY UPDATE full_name = :name_u, username = :uname_u, updated_at = :now_u",
+            [
+                ':uid' => $userId,
+                ':name' => $fullName,
+                ':uname' => !empty($username) ? $username : null,
+                ':now1' => $now,
+                ':now2' => $now,
+                ':name_u' => $fullName,
+                ':uname_u' => !empty($username) ? $username : null,
+                ':now_u' => $now,
+            ]
+        );
+
+        $member = Database::fetch("SELECT id FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+        $memberId = (int)$member['id'];
+
+        Database::execute(
+            "INSERT INTO group_members (group_id, member_id, role, joined_at, source, is_active, created_at, updated_at)
+             VALUES (:gid, :mid, 'member', :now1, 'admin_added', 1, :now2, :now3)
+             ON DUPLICATE KEY UPDATE is_active = 1, updated_at = :now_u",
+            [
+                ':gid' => $groupId,
+                ':mid' => $memberId,
+                ':now1' => $now,
+                ':now2' => $now,
+                ':now3' => $now,
+                ':now_u' => $now,
+            ]
+        );
+
+        AuditService::log('member_manually_added_to_group', 'group', (string)$groupId, [
+            'telegram_user_id' => $userId,
+            'full_name' => $fullName,
+        ]);
+
+        flash('success', "Member '{$fullName}' (ID: {$userId}) added to group roster.");
+        redirect(url('groups/view?id=' . $groupId));
+    }
+
+    /**
+     * Static helper: Fetch and upsert administrators from Telegram API into group_members.
+     */
+    public static function syncGroupAdministrators(int $groupId, int|string $telegramChatId): int
+    {
+        $botToken = config('telegram.bot_token', '');
+        if (empty($botToken)) {
+            return 0;
+        }
+
+        $tg = new TelegramService($botToken);
+        $res = $tg->getChatAdministrators($telegramChatId);
+        if (empty($res['ok']) || !is_array($res['result'])) {
+            return 0;
+        }
+
+        $count = 0;
+        $now = utc_now();
+
+        foreach ($res['result'] as $adminItem) {
+            $user = $adminItem['user'] ?? null;
+            if (!$user || !empty($user['is_bot'])) {
+                continue; // Skip bots (including our own bot)
+            }
+
+            $userId = (int)$user['id'];
+            $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+            if (empty($fullName)) {
+                $fullName = $user['username'] ?? 'User ' . $userId;
+            }
+            $username = !empty($user['username']) ? $user['username'] : null;
+
+            Database::execute(
+                "INSERT INTO members (telegram_user_id, full_name, username, is_bot, created_at, updated_at)
+                 VALUES (:uid, :name, :uname, 0, :now1, :now2)
+                 ON DUPLICATE KEY UPDATE 
+                    full_name = :name_u,
+                    username = :uname_u,
+                    updated_at = :now_u",
+                [
+                    ':uid' => $userId,
+                    ':name' => $fullName,
+                    ':uname' => $username,
+                    ':now1' => $now,
+                    ':now2' => $now,
+                    ':name_u' => $fullName,
+                    ':uname_u' => $username,
+                    ':now_u' => $now,
+                ]
+            );
+
+            $member = Database::fetch("SELECT id FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+            if ($member) {
+                $memberId = (int)$member['id'];
+                $adminRole = ($adminItem['status'] === 'creator') ? 'creator' : 'admin';
+
+                Database::execute(
+                    "INSERT INTO group_members (group_id, member_id, role, joined_at, source, is_active, created_at, updated_at)
+                     VALUES (:gid, :mid, :role, :now1, 'seen_in_group', 1, :now2, :now3)
+                     ON DUPLICATE KEY UPDATE 
+                        role = :role_u,
+                        is_active = 1,
+                        updated_at = :now_u",
+                    [
+                        ':gid' => $groupId,
+                        ':mid' => $memberId,
+                        ':role' => $adminRole,
+                        ':now1' => $now,
+                        ':now2' => $now,
+                        ':now3' => $now,
+                        ':role_u' => $adminRole,
+                        ':now_u' => $now,
+                    ]
+                );
+                $count++;
+            }
+        }
+
+        return $count;
     }
 }

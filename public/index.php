@@ -111,6 +111,8 @@ match (true) {
     $path === 'groups' && $requestMethod === 'GET' => (new GroupController())->index(),
     $path === 'groups/register' && $requestMethod === 'POST' => (new GroupController())->register(),
     $path === 'groups/update-department' && $requestMethod === 'POST' => (new GroupController())->updateDepartment(),
+    $path === 'groups/sync-admins' && $requestMethod === 'POST' => (new GroupController())->syncAdmins(),
+    $path === 'groups/add-member' && $requestMethod === 'POST' => (new GroupController())->addMember(),
     $path === 'groups/toggle-active' && $requestMethod === 'POST' => (new GroupController())->toggleActive(),
     $path === 'groups/health-check' && $requestMethod === 'POST' => (new GroupController())->healthCheck(),
     $path === 'groups/view' && $requestMethod === 'GET' => (new GroupController())->view(),

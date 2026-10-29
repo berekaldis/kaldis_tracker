@@ -91,7 +91,33 @@ class MessageTrackingService
             return ['status' => 'ignored', 'reason' => 'group_not_monitored_or_inactive'];
         }
 
-        // C. Track / update member identity if sender is a user
+        // C. Capture join / leave service events in the group
+        $messageDate = isset($message['date']) 
+            ? gmdate('Y-m-d H:i:s', (int)$message['date']) 
+            : utc_now();
+
+        if (!empty($message['new_chat_members'])) {
+            foreach ($message['new_chat_members'] as $newMember) {
+                if (!empty($newMember['id']) && empty($newMember['is_bot'])) {
+                    $this->ensureMemberRecord($newMember, (int)$group['id'], $messageDate);
+                }
+            }
+        }
+
+        if (!empty($message['left_chat_member'])) {
+            $leftUser = $message['left_chat_member'];
+            if (!empty($leftUser['id'])) {
+                $memberRec = Database::fetch("SELECT id FROM members WHERE telegram_user_id = :uid", [':uid' => (int)$leftUser['id']]);
+                if ($memberRec) {
+                    Database::execute(
+                        "UPDATE group_members SET is_active = 0, left_at = :now WHERE group_id = :gid AND member_id = :mid",
+                        [':now' => $messageDate, ':gid' => $group['id'], ':mid' => $memberRec['id']]
+                    );
+                }
+            }
+        }
+
+        // D. Track / update member identity if sender is a user
         $from = $message['from'] ?? null;
         $senderChat = $message['sender_chat'] ?? null;
         $rawText = $message['text'] ?? '';
@@ -357,6 +383,13 @@ class MessageTrackingService
             'is_admin' => $isAdmin,
             'telegram_status' => $newStatus,
         ]);
+
+        if ($botStatus === 'active') {
+            if (!empty($myChatMember['from']) && empty($myChatMember['from']['is_bot'])) {
+                $this->ensureMemberRecord($myChatMember['from'], (int)$group['id'], utc_now());
+            }
+            \App\Controllers\GroupController::syncGroupAdministrators((int)$group['id'], $chatId);
+        }
 
         return ['status' => 'updated_bot_status', 'bot_status' => $botStatus];
     }
