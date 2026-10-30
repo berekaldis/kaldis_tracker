@@ -52,8 +52,8 @@ class TelegramService
         $curlErr = curl_error($ch);
         $curlErrNo = curl_errno($ch);
 
-        // Resilient fallback for Windows environments with SSL inspection or CA issues
-        if ($response === false && in_array($curlErrNo, [CURLE_SSL_CACERT, CURLE_PEER_FAILED_VERIFICATION, 60, 77])) {
+        // Resilient fallback for Windows environments with SSL inspection or CA issues (cURL errors 35, 51, 60, 77)
+        if ($response === false && in_array($curlErrNo, [35, 51, 60, 77], true)) {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             $response = curl_exec($ch);
