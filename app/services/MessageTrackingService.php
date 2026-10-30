@@ -43,6 +43,7 @@ class MessageTrackingService
                 'edited_message' => $this->handleEditedMessage($payload['edited_message']),
                 'my_chat_member' => $this->handleMyChatMember($payload['my_chat_member']),
                 'chat_member' => $this->handleChatMember($payload['chat_member']),
+                'callback_query' => $this->handleCallbackQuery($payload['callback_query']),
                 default => ['status' => 'ignored', 'type' => $updateType],
             };
 
@@ -177,6 +178,32 @@ class MessageTrackingService
         // E. Check if this is an authorized user posting a message to track
         $authorizedUserIds = (array)config('telegram.authorized_user_ids', []);
         $isAuthorizedUser = in_array((string)$userId, array_map('strval', $authorizedUserIds));
+
+        // F. Handle /checkin, /rollcall, or /roster interactive enrollment command
+        $botUser = strtolower((string)config('telegram.bot_username', ''));
+        $trimmedLower = trim($lowerText);
+        $isCheckinCmd = in_array($trimmedLower, [
+            '/checkin', '/rollcall', '/roster',
+            '/checkin@' . $botUser, '/rollcall@' . $botUser, '/roster@' . $botUser
+        ]);
+
+        if ($isCheckinCmd && ($isAuthorizedUser || ($member['role'] ?? '') === 'admin' || ($member['role'] ?? '') === 'creator')) {
+            $tg = new TelegramService();
+            $keyboard = [
+                [
+                    [
+                        'text' => '✋ Tap Here to Register / Check In',
+                        'callback_data' => 'checkin:' . $group['id']
+                    ]
+                ]
+            ];
+            $tg->sendMessageWithKeyboard(
+                $chatId,
+                "☕ <b>Kaldis Coffee Team Roster Check-In</b>\n\nWelcome team! Please tap the button below to register your profile on the monitoring dashboard for <b>" . e($group['title']) . "</b>.",
+                $keyboard
+            );
+            return ['status' => 'checkin_dispatched', 'group_id' => $group['id']];
+        }
 
         // Case 1: Message contains #track from authorized user
         if ($isAuthorizedUser && $hasTrackHashtag) {
@@ -924,10 +951,60 @@ class MessageTrackingService
         return $member;
     }
 
+    /**
+     * Handle inline button callback queries (e.g. checkin:123).
+     */
+    private function handleCallbackQuery(array $callbackQuery): array
+    {
+        $callbackId = (string)($callbackQuery['id'] ?? '');
+        $from = $callbackQuery['from'] ?? null;
+        $message = $callbackQuery['message'] ?? [];
+        $chat = $message['chat'] ?? [];
+        $chatId = $chat['id'] ?? null;
+        $data = (string)($callbackQuery['data'] ?? '');
+
+        if (!$from || empty($from['id'])) {
+            return ['status' => 'ignored', 'reason' => 'no_user_in_callback'];
+        }
+
+        if (str_starts_with($data, 'checkin:')) {
+            $groupId = (int)substr($data, strlen('checkin:'));
+            $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+            if (!$group && $chatId) {
+                $group = Database::fetch("SELECT * FROM telegram_groups WHERE telegram_chat_id = :cid", [':cid' => $chatId]);
+            }
+
+            if ($group) {
+                $member = $this->ensureMemberRecord($from, (int)$group['id'], utc_now());
+
+                $tg = new TelegramService();
+                $userName = $from['first_name'] ?? 'Team Member';
+                $tg->answerCallbackQuery(
+                    $callbackId,
+                    "✅ Success {$userName}! You have been registered on the Kaldis Tracker roster for {$group['title']}.",
+                    true // Display modal popup alert
+                );
+
+                AuditService::log('member_checked_in_via_button', 'group', (string)$group['id'], [
+                    'telegram_user_id' => $from['id'],
+                    'name' => $userName,
+                    'group_title' => $group['title'],
+                ]);
+
+                return ['status' => 'checked_in', 'user_id' => $from['id'], 'group_id' => $group['id']];
+            }
+        }
+
+        $tg = new TelegramService();
+        $tg->answerCallbackQuery($callbackId, "Received.");
+        return ['status' => 'ignored', 'reason' => 'unknown_callback_data'];
+    }
+
     private function determineUpdateType(array $payload): string
     {
         if (isset($payload['message'])) return 'message';
         if (isset($payload['edited_message'])) return 'edited_message';
+        if (isset($payload['callback_query'])) return 'callback_query';
         if (isset($payload['my_chat_member'])) return 'my_chat_member';
         if (isset($payload['chat_member'])) return 'chat_member';
         if (isset($payload['message_reaction'])) return 'message_reaction';
@@ -939,6 +1016,7 @@ class MessageTrackingService
         return match ($type) {
             'message' => $payload['message']['chat']['id'] ?? null,
             'edited_message' => $payload['edited_message']['chat']['id'] ?? null,
+            'callback_query' => $payload['callback_query']['message']['chat']['id'] ?? null,
             'my_chat_member' => $payload['my_chat_member']['chat']['id'] ?? null,
             'chat_member' => $payload['chat_member']['chat']['id'] ?? null,
             'message_reaction' => $payload['message_reaction']['chat']['id'] ?? null,

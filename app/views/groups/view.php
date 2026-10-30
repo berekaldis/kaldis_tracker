@@ -20,21 +20,35 @@ $isOwner = AuthService::isOwner();
             </div>
         </div>
     </div>
-    <div class="col-md-6 text-md-end mt-3 mt-md-0 d-flex flex-wrap align-items-center justify-content-md-end gap-2">
+    <div class="col-md-7 text-md-end mt-3 mt-md-0 d-flex flex-wrap align-items-center justify-content-md-end gap-2">
         <?php if ($isOwner): ?>
+            <!-- Send Interactive Check-in Button to Telegram -->
+            <form method="POST" action="<?= url('groups/send-checkin') ?>" class="d-inline" onsubmit="return confirm('Send an interactive Check-in button to the Telegram group? Members simply tap it to register.');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="group_id" value="<?= $group['id'] ?>">
+                <button type="submit" class="btn btn-success btn-sm shadow-sm" title="Send interactive 'Tap to Check In' button directly into the Telegram group">
+                    <i class="bi bi-broadcast-pin me-1"></i> Send Check-in Button to Telegram
+                </button>
+            </form>
+
             <!-- Sync Admins Button -->
             <form method="POST" action="<?= url('groups/sync-admins') ?>" class="d-inline">
                 <?= csrf_field() ?>
                 <input type="hidden" name="group_id" value="<?= $group['id'] ?>">
                 <input type="hidden" name="redirect_to_view" value="1">
-                <button type="submit" class="btn btn-primary btn-sm shadow-sm" title="Pull Creators and Administrators directly from Telegram">
-                    <i class="bi bi-arrow-repeat me-1"></i> Sync Admins from Telegram
+                <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm" title="Pull Creators and Administrators directly from Telegram">
+                    <i class="bi bi-arrow-repeat me-1"></i> Sync Admins
                 </button>
             </form>
 
-            <!-- Add Member Button -->
+            <!-- Bulk Import Button -->
+            <button type="button" class="btn btn-outline-dark btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalBulkImport">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Bulk Import
+            </button>
+
+            <!-- Add Single Member Button -->
             <button type="button" class="btn btn-kaldis btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAddMember">
-                <i class="bi bi-person-plus-fill me-1"></i> Add Member
+                <i class="bi bi-person-plus-fill me-1"></i> Add Single Member
             </button>
         <?php endif; ?>
 
@@ -85,31 +99,32 @@ $isOwner = AuthService::isOwner();
 </div>
 
 <!-- Explanatory Notice: How Telegram Member Discovery Works -->
-<div class="alert alert-info border-info-subtle shadow-sm mb-4">
+<div class="alert alert-warning-subtle border border-warning shadow-sm mb-4">
     <div class="d-flex align-items-start">
-        <div class="fs-3 text-info me-3 mt-1"><i class="bi bi-info-circle-fill"></i></div>
-        <div>
-            <h6 class="fw-bold mb-1 text-dark">Why aren't all 25 members listed immediately?</h6>
+        <div class="fs-2 text-warning me-3 mt-1"><i class="bi bi-shield-exclamation"></i></div>
+        <div class="flex-grow-1">
+            <h6 class="fw-bold mb-1 text-dark">Why did "Sync Admins" only sync the Admin and Group Owner?</h6>
             <p class="small text-secondary mb-2">
-                Telegram's strict privacy policy <strong>does not allow any bot to download a group's full member list at once</strong>. Instead, members are populated in the system using the following methods:
+                Under <strong>Telegram's official platform security &amp; privacy policy</strong>, bots are <strong>strictly forbidden from downloading the full member list of a group in bulk</strong> (there is no <code>getChatMembers</code> API in Telegram). The only endpoint Telegram provides is <code>getChatAdministrators</code>, which exclusively returns the group creator and administrators.
             </p>
+            <div class="fw-semibold small text-dark mb-2">To get all other 23+ members into this roster, use any of these 3 easy methods:</div>
             <div class="row g-2 small">
                 <div class="col-md-4">
-                    <div class="p-2 bg-white rounded border h-100">
-                        <strong class="text-primary"><i class="bi bi-arrow-repeat me-1"></i> 1. Sync Admins (Instant)</strong>
-                        <div class="text-muted mt-1">Click <strong>Sync Admins from Telegram</strong> to immediately import all group creators, managers, and administrators.</div>
+                    <div class="p-2 bg-white rounded border h-100 shadow-sm">
+                        <strong class="text-success d-block mb-1"><i class="bi bi-broadcast-pin me-1"></i> 1. Send Check-in Button (Recommended)</strong>
+                        <div class="text-muted">Click <strong>"Send Check-in Button to Telegram"</strong> above. A button appears in the Telegram group; when staff tap it, they are <strong>instantly registered</strong> on this roster with their real name &amp; ID!</div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="p-2 bg-white rounded border h-100">
-                        <strong class="text-success"><i class="bi bi-chat-dots me-1"></i> 2. Send Any Message (Auto)</strong>
-                        <div class="text-muted mt-1">Ask the team to send a quick greeting (e.g. <em>"Hi team"</em>). Each member is <strong>automatically registered forever</strong> the instant they send a message.</div>
+                    <div class="p-2 bg-white rounded border h-100 shadow-sm">
+                        <strong class="text-primary d-block mb-1"><i class="bi bi-chat-dots me-1"></i> 2. Auto-Discovery as They Chat</strong>
+                        <div class="text-muted">Whenever a waiter or staff member sends <strong>any message, photo, greeting, or reply</strong> in the group, the system captures them and adds them to this roster automatically.</div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="p-2 bg-white rounded border h-100">
-                        <strong class="text-dark"><i class="bi bi-person-plus me-1"></i> 3. Add Member Manually</strong>
-                        <div class="text-muted mt-1">Click <strong>Add Member</strong> to register staff members in advance using their Telegram User ID (from <code>@userinfobot</code>) or username.</div>
+                    <div class="p-2 bg-white rounded border h-100 shadow-sm">
+                        <strong class="text-dark d-block mb-1"><i class="bi bi-file-earmark-spreadsheet me-1"></i> 3. Bulk Import / Paste</strong>
+                        <div class="text-muted">Click <strong>"Bulk Import"</strong> to paste your staff list (Names and Telegram @usernames or IDs) or upload a CSV file from HR/management.</div>
                     </div>
                 </div>
             </div>
@@ -234,6 +249,62 @@ $isOwner = AuthService::isOwner();
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-kaldis btn-sm">
                     <i class="bi bi-check2 me-1"></i> Add to Roster
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Bulk Import Roster -->
+<div class="modal fade" id="modalBulkImport" tabindex="-1" aria-labelledby="modalBulkImportLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="POST" action="<?= url('groups/bulk-import') ?>" enctype="multipart/form-data" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="group_id" value="<?= $group['id'] ?>">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold" id="modalBulkImportLabel">
+                    <i class="bi bi-file-earmark-spreadsheet text-primary me-2"></i> Bulk Import Staff Members to Roster
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Quickly add multiple waiters, baristas, or staff members to <strong><?= e($group['title']) ?></strong> by pasting their names and Telegram IDs/usernames, or by uploading a CSV file.
+                </p>
+
+                <!-- Method A: Paste Text -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">
+                        Paste Member List <span class="text-muted">(One member per line)</span>
+                    </label>
+                    <textarea name="raw_members" class="form-control font-monospace small" rows="7" placeholder="Format: Full Name, Telegram User ID or @username, Role (optional)
+Example:
+Abebe Bikila, @abebikila, member
+Sara Mengistu, 555666777, member
+Dawit Kebede, @dawit_k, member
+Berhanu Supervisor, 1626288394, admin"></textarea>
+                    <div class="form-text small">
+                        Accepts comma-separated or tab-separated entries. You can paste directly from Excel or Google Sheets.
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center my-3">
+                    <hr class="flex-grow-1 my-0">
+                    <span class="px-3 text-muted small fw-semibold">OR UPLOAD CSV</span>
+                    <hr class="flex-grow-1 my-0">
+                </div>
+
+                <!-- Method B: Upload CSV File -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Upload CSV / TXT File</label>
+                    <input type="file" name="csv_file" class="form-control" accept=".csv,.txt">
+                    <div class="form-text small">Columns: <code>Name, Identifier (@username or ID), Role</code></div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-kaldis btn-sm">
+                    <i class="bi bi-cloud-arrow-up me-1"></i> Import Members
                 </button>
             </div>
         </form>

@@ -465,6 +465,214 @@ class GroupController
     }
 
     /**
+     * Dispatch interactive Roll Call / Check-in message with button to the Telegram group.
+     */
+    public function sendCheckinPrompt(): void
+    {
+        AuthService::requireOwner();
+        AuthService::verifyCsrf();
+
+        $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
+        $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+        if (!$group) {
+            flash('danger', 'Group not found.');
+            redirect(url('groups'));
+        }
+
+        $botToken = config('telegram.bot_token', '');
+        if (empty($botToken)) {
+            flash('danger', 'Telegram Bot Token is not configured.');
+            redirect(url('groups/view?id=' . $groupId));
+        }
+
+        $tg = new TelegramService($botToken);
+        $keyboard = [
+            [
+                [
+                    'text' => '✋ Tap Here to Register / Check In',
+                    'callback_data' => 'checkin:' . $group['id']
+                ]
+            ]
+        ];
+
+        $deptLabel = !empty($group['department']) ? " [{$group['department']}]" : "";
+        $res = $tg->sendMessageWithKeyboard(
+            $group['telegram_chat_id'],
+            "☕ <b>Kaldis Coffee Roster Registration & Attendance Check-In</b>{$deptLabel}\n\n" .
+            "Hello team! Please tap the button below to register your profile with the attendance system for <b>" . e($group['title']) . "</b>.\n\n" .
+            "<i>(Once you tap the button, your profile will be automatically linked to the roster.)</i>",
+            $keyboard
+        );
+
+        if (!empty($res['ok'])) {
+            AuditService::log('checkin_prompt_sent_to_group', 'group', (string)$groupId, [
+                'group_title' => $group['title'],
+                'chat_id' => $group['telegram_chat_id'],
+            ]);
+            flash('success', "Interactive Check-In button sent to '{$group['title']}' on Telegram! Group members simply tap the button to register instantly.");
+        } else {
+            $err = $res['description'] ?? 'Telegram API error';
+            flash('danger', "Failed to send check-in message to Telegram: {$err}. Ensure the bot has permission to post in this group.");
+        }
+
+        redirect(url('groups/view?id=' . $groupId));
+    }
+
+    /**
+     * Bulk import members by pasting text or uploading CSV.
+     */
+    public function bulkImportMembers(): void
+    {
+        AuthService::requireOwner();
+        AuthService::verifyCsrf();
+
+        $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
+
+        $group = Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => $groupId]);
+        if (!$group) {
+            flash('danger', 'Group not found.');
+            redirect(url('groups'));
+        }
+
+        $rawText = trim($_POST['raw_members'] ?? '');
+
+        // If file was uploaded, read file content
+        if (isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
+            $uploadedContent = file_get_contents($_FILES['csv_file']['tmp_name']);
+            if ($uploadedContent !== false) {
+                $rawText .= "\n" . $uploadedContent;
+            }
+        }
+
+        if (empty(trim($rawText))) {
+            flash('danger', 'Please provide a list of members to import or upload a CSV file.');
+            redirect(url('groups/view?id=' . $groupId));
+        }
+
+        $lines = preg_split("/\r\n|\n|\r/", $rawText);
+        $importedCount = 0;
+        $now = utc_now();
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || str_starts_with($line, '#')) {
+                continue;
+            }
+
+            // CSV or comma/tab separated: "Name, UserID or @username, Role"
+            $parts = str_getcsv($line);
+            if (count($parts) === 1 && str_contains($line, "\t")) {
+                $parts = explode("\t", $line);
+            }
+
+            $name = trim($parts[0] ?? '');
+            $identifier = trim($parts[1] ?? '');
+            $role = strtolower(trim($parts[2] ?? 'member'));
+            if (!in_array($role, ['member', 'admin', 'creator'])) {
+                $role = 'member';
+            }
+
+            // If only identifier is provided (e.g. 814523272 or @username)
+            if (empty($identifier) && !empty($name)) {
+                if (preg_match('/^-?\d+$/', $name)) {
+                    $identifier = $name;
+                    $name = 'Member ' . $identifier;
+                } elseif (str_starts_with($name, '@')) {
+                    $identifier = $name;
+                    $name = ltrim($name, '@');
+                }
+            }
+
+            $userId = null;
+            $username = null;
+
+            if (preg_match('/^-?\d+$/', $identifier)) {
+                $userId = (int)$identifier;
+            } elseif (preg_match('/^-?\d+$/', $name)) {
+                $userId = (int)$name;
+            }
+
+            if (str_starts_with($identifier, '@') || (!preg_match('/^-?\d+$/', $identifier) && !empty($identifier))) {
+                $username = ltrim($identifier, '@');
+            } elseif (str_starts_with($name, '@')) {
+                $username = ltrim($name, '@');
+            }
+
+            if (!$userId && empty($username)) {
+                continue; // Cannot import without a Telegram User ID or Username
+            }
+
+            // If no user ID is known, generate a negative deterministic placeholder based on username hash
+            if (!$userId) {
+                // Check if username already exists in members
+                $existingMember = Database::fetch("SELECT * FROM members WHERE username = :un", [':un' => $username]);
+                if ($existingMember) {
+                    $userId = (int)$existingMember['telegram_user_id'];
+                } else {
+                    $userId = -(abs(crc32($username)) + 1000000);
+                }
+            }
+
+            if (empty($name)) {
+                $name = $username ?: 'Member ' . $userId;
+            }
+
+            Database::execute(
+                "INSERT INTO members (telegram_user_id, full_name, username, is_bot, created_at, updated_at)
+                 VALUES (:uid, :name, :uname, 0, :now1, :now2)
+                 ON DUPLICATE KEY UPDATE 
+                    full_name = :name_u,
+                    username = COALESCE(:uname_u, username),
+                    updated_at = :now_u",
+                [
+                    ':uid' => $userId,
+                    ':name' => $name,
+                    ':uname' => $username,
+                    ':now1' => $now,
+                    ':now2' => $now,
+                    ':name_u' => $name,
+                    ':uname_u' => $username,
+                    ':now_u' => $now,
+                ]
+            );
+
+            $m = Database::fetch("SELECT id FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+            if ($m) {
+                Database::execute(
+                    "INSERT INTO group_members (group_id, member_id, role, joined_at, source, is_active, created_at, updated_at)
+                     VALUES (:gid, :mid, :role, :now1, 'imported', 1, :now2, :now3)
+                     ON DUPLICATE KEY UPDATE 
+                        role = :role_u,
+                        is_active = 1,
+                        updated_at = :now_u",
+                    [
+                        ':gid' => $groupId,
+                        ':mid' => $m['id'],
+                        ':role' => $role,
+                        ':now1' => $now,
+                        ':now2' => $now,
+                        ':now3' => $now,
+                        ':role_u' => $role,
+                        ':now_u' => $now,
+                    ]
+                );
+                $importedCount++;
+            }
+        }
+
+        AuditService::log('members_bulk_imported', 'group', (string)$groupId, [
+            'group_title' => $group['title'],
+            'imported_count' => $importedCount,
+        ]);
+
+        flash('success', "Bulk import completed! {$importedCount} member(s) added/updated on the roster for '{$group['title']}'.");
+        redirect(url('groups/view?id=' . $groupId));
+    }
+
+    /**
      * Static helper: Fetch and upsert administrators from Telegram API into group_members.
      */
     public static function syncGroupAdministrators(int $groupId, int|string $telegramChatId): int

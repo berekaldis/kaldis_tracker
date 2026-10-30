@@ -136,7 +136,8 @@ class TelegramService
                 'edited_message',
                 'chat_member',
                 'my_chat_member',
-                'message_reaction'
+                'message_reaction',
+                'callback_query'
             ];
         }
 
@@ -180,5 +181,43 @@ class TelegramService
         }
 
         return $this->request('sendMessage', $params);
+    }
+
+    /**
+     * Send message with inline keyboard buttons.
+     */
+    public function sendMessageWithKeyboard(int|string $chatId, string $text, array $inlineKeyboard, ?int $replyToMessageId = null): array
+    {
+        $params = [
+            'chat_id' => $chatId,
+            'text' => $text,
+            'parse_mode' => 'HTML',
+            'reply_markup' => [
+                'inline_keyboard' => $inlineKeyboard,
+            ],
+        ];
+
+        if ($replyToMessageId !== null) {
+            $params['reply_to_message_id'] = $replyToMessageId;
+        }
+
+        return $this->request('sendMessage', $params);
+    }
+
+    /**
+     * Answer an incoming callback query from an inline button tap.
+     */
+    public function answerCallbackQuery(string $callbackQueryId, ?string $text = null, bool $showAlert = false): array
+    {
+        $params = [
+            'callback_query_id' => $callbackQueryId,
+            'show_alert' => $showAlert,
+        ];
+
+        if ($text !== null) {
+            $params['text'] = $text;
+        }
+
+        return $this->request('answerCallbackQuery', $params);
     }
 }
