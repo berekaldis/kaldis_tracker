@@ -36,8 +36,17 @@ try {
         $filename = basename($file);
         echo "[*] Running migration: {$filename}... ";
         $sql = file_get_contents($file);
-        $pdo->exec($sql);
-        echo "DONE\n";
+        try {
+            $pdo->exec($sql);
+            echo "DONE\n";
+        } catch (\PDOException $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'Duplicate column') || str_contains($msg, 'already exists') || str_contains($msg, 'Duplicate key')) {
+                echo "ALREADY APPLIED\n";
+            } else {
+                throw $e;
+            }
+        }
     }
 
     // 2. Check if default Owner Admin exists, or prompt/create one

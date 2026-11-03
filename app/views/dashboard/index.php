@@ -1,6 +1,8 @@
 <?php
 use App\Services\AuthService;
 $isOwner = AuthService::isOwner();
+$canTrack = AuthService::canTrack();
+$assignedGroupId = AuthService::assignedGroupId();
 ?>
 <div class="row align-items-center mb-4">
     <div class="col-md-7">
@@ -29,13 +31,13 @@ $isOwner = AuthService::isOwner();
             <span class="fw-semibold text-dark me-2">Live Updates</span>
             <span id="dashSyncTime" class="text-muted" style="font-size: 0.75rem;">Just now</span>
         </div>
-        <?php if ($isOwner): ?>
+        <?php if ($canTrack): ?>
             <button type="button" class="btn btn-kaldis shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
                 <i class="bi bi-pin-angle me-1"></i> Track Message
             </button>
         <?php endif; ?>
         <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
-            <i class="bi bi-people me-1"></i> Manage Groups
+            <i class="bi bi-people me-1"></i> <?= $isOwner ? 'Manage Groups' : 'View Groups' ?>
         </a>
     </div>
 </div>
@@ -332,7 +334,7 @@ $isOwner = AuthService::isOwner();
 </div>
 
 <!-- Modal: Manually Track Message -->
-<?php if ($isOwner): ?>
+<?php if ($canTrack): ?>
 <div class="modal fade" id="modalManualTrack" tabindex="-1" aria-labelledby="modalManualTrackLabel" aria-hidden="true">
     <div class="modal-dialog">
         <form method="POST" action="<?= url('messages/create') ?>" class="modal-content">
@@ -349,7 +351,9 @@ $isOwner = AuthService::isOwner();
                     <select name="group_id" class="form-select" required>
                         <option value="">Select Group...</option>
                         <?php foreach ($groups as $g): ?>
-                            <option value="<?= $g['id'] ?>"><?= e($g['title']) ?> (<?= e($g['telegram_chat_id']) ?>)</option>
+                            <option value="<?= $g['id'] ?>" <?= (count($groups) === 1 || $assignedGroupId === (int)$g['id']) ? 'selected' : '' ?>>
+                                <?= e($g['title']) ?> (<?= e($g['telegram_chat_id']) ?>)
+                            </option>
                         <?php endforeach; ?>
                     </select>
                 </div>

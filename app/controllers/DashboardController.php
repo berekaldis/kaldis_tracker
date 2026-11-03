@@ -54,11 +54,23 @@ class DashboardController
             } catch (\Exception) {}
         }
 
-        // Department scoping and filtering
+        // Department and Group scoping and filtering
+        $assignedGroup = AuthService::assignedGroupId();
         $userDept = AuthService::userDepartment();
         $selectedDepartment = null;
 
-        if ($userDept !== null) {
+        if ($assignedGroup !== null) {
+            // Strict Group Isolation: User can ONLY see their assigned group's conversations
+            $whereClauses[] = "tm.group_id = :assigned_gid";
+            $params[':assigned_gid'] = $assignedGroup;
+
+            $groups = Database::fetchAll(
+                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE id = :agid",
+                [':agid' => $assignedGroup]
+            );
+            $selectedDepartment = $groups[0]['department'] ?? null;
+            $departments = $selectedDepartment ? [$selectedDepartment] : [];
+        } elseif ($userDept !== null) {
             // Strict Department Isolation: User can ONLY see their assigned department
             $whereClauses[] = "tg.department = :user_dept";
             $params[':user_dept'] = $userDept;
@@ -273,9 +285,13 @@ class DashboardController
         $whereClauses = ["tm.is_active = 1"];
         $params = [];
 
-        // Apply Department Isolation in API
+        // Apply Department / Group Isolation in API
+        $assignedGroup = AuthService::assignedGroupId();
         $userDept = AuthService::userDepartment();
-        if ($userDept !== null) {
+        if ($assignedGroup !== null) {
+            $whereClauses[] = "tm.group_id = :assigned_gid";
+            $params[':assigned_gid'] = $assignedGroup;
+        } elseif ($userDept !== null) {
             $whereClauses[] = "tg.department = :user_dept";
             $params[':user_dept'] = $userDept;
         } elseif (!empty($_GET['department'])) {
@@ -324,7 +340,9 @@ class DashboardController
                     FROM tracked_messages tm 
                     JOIN telegram_groups tg ON tm.group_id = tg.id 
                     WHERE tm.id IN ({$placeholders})";
-            if ($userDept !== null) {
+            if ($assignedGroup !== null) {
+                $sql .= " AND tm.group_id = " . (int)$assignedGroup;
+            } elseif ($userDept !== null) {
                 $sql .= " AND tg.department = " . Database::pdo()->quote($userDept);
             }
             $rows = Database::fetchAll($sql, $msgIds);

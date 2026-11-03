@@ -16,11 +16,15 @@ class GroupController
     {
         AuthService::requireLogin();
 
+        $assignedGroup = AuthService::assignedGroupId();
         $userDept = AuthService::userDepartment();
         $params = [];
         $whereSql = '';
 
-        if ($userDept !== null) {
+        if ($assignedGroup !== null) {
+            $whereSql = "WHERE g.id = :assigned_gid";
+            $params[':assigned_gid'] = $assignedGroup;
+        } elseif ($userDept !== null) {
             $whereSql = "WHERE g.department = :dept";
             $params[':dept'] = $userDept;
         }

@@ -8,7 +8,7 @@ class AuditController
 {
     public function index(): void
     {
-        AuthService::requireLogin();
+        AuthService::requireOwner();
 
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = 25;

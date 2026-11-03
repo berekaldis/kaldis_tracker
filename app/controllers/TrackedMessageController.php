@@ -103,10 +103,11 @@ class TrackedMessageController
      */
     public function create(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $groupId = (int)($_POST['group_id'] ?? 0);
+        AuthService::requireGroupAccess($groupId);
         $telegramMessageId = trim($_POST['telegram_message_id'] ?? '');
         $telegramUserId = trim($_POST['telegram_user_id'] ?? '');
         $messageText = trim($_POST['message_text'] ?? '');
@@ -255,7 +256,7 @@ class TrackedMessageController
      */
     public function confirmResponse(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $responseId = (int)($_POST['response_id'] ?? 0);
@@ -291,7 +292,7 @@ class TrackedMessageController
      */
     public function rejectResponse(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $responseId = (int)($_POST['response_id'] ?? 0);
@@ -327,7 +328,7 @@ class TrackedMessageController
      */
     public function excludeMember(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);
@@ -382,7 +383,7 @@ class TrackedMessageController
      */
     public function includeMember(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);
@@ -408,7 +409,7 @@ class TrackedMessageController
      */
     public function manualMarkReplied(): void
     {
-        AuthService::requireOwner();
+        AuthService::requireCanTrack();
         AuthService::verifyCsrf();
 
         $messageId = (int)($_POST['message_id'] ?? 0);

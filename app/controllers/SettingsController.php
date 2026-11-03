@@ -214,7 +214,12 @@ class SettingsController
     {
         AuthService::requireSuperAdmin();
 
-        $admins = Database::fetchAll("SELECT * FROM admins ORDER BY created_at ASC");
+        $admins = Database::fetchAll(
+            "SELECT a.*, tg.title AS assigned_group_title, tg.telegram_chat_id AS assigned_group_chat_id 
+             FROM admins a 
+             LEFT JOIN telegram_groups tg ON a.assigned_group_id = tg.id 
+             ORDER BY a.created_at ASC"
+        );
         $standardDepartments = ['IT', 'Operations', 'Supply Chain', 'Finance', 'Quality & Barista', 'HR & Admin', 'Marketing'];
         $dbDepts = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != ''");
         foreach ($dbDepts as $d) {
@@ -223,9 +228,12 @@ class SettingsController
             }
         }
 
+        $allGroups = Database::fetchAll("SELECT id, title, telegram_chat_id, department FROM telegram_groups ORDER BY title ASC");
+
         view('settings.admins', [
             'admins' => $admins,
             'departments' => $standardDepartments,
+            'allGroups' => $allGroups,
             'pageTitle' => 'Admin Users Management',
         ]);
     }
@@ -241,17 +249,26 @@ class SettingsController
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $password = (string)($_POST['password'] ?? '');
-        $role = trim($_POST['role'] ?? 'viewer');
+        $role = trim($_POST['role'] ?? 'user');
         $department = trim($_POST['department'] ?? '');
+        $assignedGroupId = !empty($_POST['assigned_group_id']) ? (int)$_POST['assigned_group_id'] : null;
         $deptVal = (empty($department) || strcasecmp($department, 'all') === 0) ? null : $department;
+
+        // Auto-assign department if a specific group is chosen without explicit department
+        if ($assignedGroupId !== null && empty($deptVal)) {
+            $g = Database::fetch("SELECT department FROM telegram_groups WHERE id = :gid", [':gid' => $assignedGroupId]);
+            if ($g && !empty($g['department'])) {
+                $deptVal = $g['department'];
+            }
+        }
 
         if (empty($username) || empty($email) || empty($password)) {
             flash('danger', 'Please provide Username, Email, and Password.');
             redirect(url('settings/admins'));
         }
 
-        if (!in_array($role, ['super_admin', 'owner', 'viewer'])) {
-            $role = 'viewer';
+        if (!in_array($role, ['super_admin', 'owner', 'user', 'viewer'])) {
+            $role = 'user';
         }
 
         // Check duplicate
@@ -263,14 +280,15 @@ class SettingsController
 
         $now = utc_now();
         Database::execute(
-            "INSERT INTO admins (username, email, password_hash, role, department, is_active, created_at, updated_at)
-             VALUES (:u, :e, :p, :role, :dept, 1, :now1, :now2)",
+            "INSERT INTO admins (username, email, password_hash, role, department, assigned_group_id, is_active, created_at, updated_at)
+             VALUES (:u, :e, :p, :role, :dept, :agid, 1, :now1, :now2)",
             [
                 ':u' => $username,
                 ':e' => $email,
                 ':p' => password_hash($password, PASSWORD_DEFAULT),
                 ':role' => $role,
                 ':dept' => $deptVal,
+                ':agid' => $assignedGroupId,
                 ':now1' => $now,
                 ':now2' => $now,
             ]
@@ -281,16 +299,22 @@ class SettingsController
             'username' => $username,
             'role' => $role,
             'department' => $deptVal ?? 'All Departments',
+            'assigned_group_id' => $assignedGroupId,
             'email' => $email
         ]);
 
-        $deptLabel = $deptVal ? " for {$deptVal} Department" : " (Company-wide)";
-        flash('success', "New administrator '{$username}' ({$role}){$deptLabel} created successfully!");
+        $groupLabel = '';
+        if ($assignedGroupId !== null) {
+            $gInfo = Database::fetch("SELECT title FROM telegram_groups WHERE id = :gid", [':gid' => $assignedGroupId]);
+            $groupLabel = " restricted to group '" . ($gInfo['title'] ?? "#$assignedGroupId") . "'";
+        }
+        $deptLabel = $deptVal ? " ({$deptVal} Dept)" : " (Company-wide)";
+        flash('success', "New user '{$username}' ({$role}){$deptLabel}{$groupLabel} created successfully!");
         redirect(url('settings/admins'));
     }
 
     /**
-     * Update an Admin User's Department assignment.
+     * Update an Admin User's Department & Group assignment & Role.
      */
     public function updateAdminDepartment(): void
     {
@@ -299,7 +323,9 @@ class SettingsController
 
         $adminId = (int)($_POST['admin_id'] ?? 0);
         $department = trim($_POST['department'] ?? '');
+        $assignedGroupId = !empty($_POST['assigned_group_id']) ? (int)$_POST['assigned_group_id'] : null;
         $deptVal = (empty($department) || strcasecmp($department, 'all') === 0) ? null : $department;
+        $role = trim($_POST['role'] ?? '');
 
         $admin = Database::fetch("SELECT * FROM admins WHERE id = :id", [':id' => $adminId]);
         if (!$admin) {
@@ -307,20 +333,43 @@ class SettingsController
             redirect(url('settings/admins'));
         }
 
-        Database::execute("UPDATE admins SET department = :dept, updated_at = :now WHERE id = :id", [
-            ':dept' => $deptVal,
-            ':now' => utc_now(),
-            ':id' => $adminId,
-        ]);
+        // Auto-assign department if a specific group is chosen without explicit department
+        if ($assignedGroupId !== null && empty($deptVal)) {
+            $g = Database::fetch("SELECT department FROM telegram_groups WHERE id = :gid", [':gid' => $assignedGroupId]);
+            if ($g && !empty($g['department'])) {
+                $deptVal = $g['department'];
+            }
+        }
+
+        $updateRole = $admin['role'];
+        if (!empty($role) && in_array($role, ['super_admin', 'owner', 'user', 'viewer'])) {
+            $updateRole = $role;
+        }
+
+        Database::execute(
+            "UPDATE admins 
+             SET department = :dept, assigned_group_id = :agid, role = :role, updated_at = :now 
+             WHERE id = :id",
+            [
+                ':dept' => $deptVal,
+                ':agid' => $assignedGroupId,
+                ':role' => $updateRole,
+                ':now' => utc_now(),
+                ':id' => $adminId,
+            ]
+        );
 
         AuditService::log('admin_department_updated', 'admin', (string)$adminId, [
             'username' => $admin['username'],
             'old_department' => $admin['department'] ?? 'All Departments',
             'new_department' => $deptVal ?? 'All Departments',
+            'old_assigned_group' => $admin['assigned_group_id'],
+            'new_assigned_group' => $assignedGroupId,
+            'role' => $updateRole,
         ]);
 
-        $deptLabel = $deptVal ?? 'All Departments (Company-wide)';
-        flash('success', "Department assignment for '{$admin['username']}' updated to '{$deptLabel}'.");
+        $deptLabel = $deptVal ?? 'All Departments';
+        flash('success', "Access scope for '{$admin['username']}' updated successfully ({$updateRole}, {$deptLabel}).");
         redirect(url('settings/admins'));
     }
 

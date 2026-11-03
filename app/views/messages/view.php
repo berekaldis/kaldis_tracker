@@ -1,6 +1,7 @@
 <?php
 use App\Services\AuthService;
 $isOwner = AuthService::isOwner();
+$canTrack = AuthService::canTrack();
 $pct = $stats['percentage'];
 $pctColor = $pct >= 80 ? 'success' : ($pct >= 40 ? 'warning' : 'danger');
 
@@ -295,7 +296,7 @@ $unrepliedString = implode(' ', $unrepliedMentions);
                                 <?php endif; ?>
                             </td>
                             <td class="text-end actions-col">
-                                <?php if ($isOwner): ?>
+                                <?php if ($canTrack): ?>
                                     <?php if ($status === 'pending_review'): ?>
                                         <div class="d-inline-flex gap-1">
                                             <form action="<?= url('messages/confirm-response') ?>" method="POST" class="d-inline">

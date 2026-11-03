@@ -76,6 +76,60 @@ class AuthService
     }
 
     /**
+     * Check if logged in user has 'user' (normal user) role.
+     */
+    public static function isUser(): bool
+    {
+        $u = self::user();
+        return $u !== null && ($u['role'] ?? '') === 'user';
+    }
+
+    /**
+     * Check if logged in user has 'viewer' role.
+     */
+    public static function isViewer(): bool
+    {
+        $u = self::user();
+        return $u !== null && ($u['role'] ?? '') === 'viewer';
+    }
+
+    /**
+     * Check if current user has permission to track conversations & review responses.
+     * Allowed: super_admin, owner, user (normal user).
+     * Denied: viewer.
+     */
+    public static function canTrack(): bool
+    {
+        $u = self::user();
+        return $u !== null && in_array(($u['role'] ?? ''), ['super_admin', 'owner', 'user']);
+    }
+
+    /**
+     * Require permission to track conversations; redirect if unauthorized.
+     */
+    public static function requireCanTrack(): void
+    {
+        self::requireLogin();
+        if (!self::canTrack()) {
+            flash('danger', 'Access denied: Viewer role does not have permission to track or modify conversations.');
+            redirect(url('dashboard'));
+        }
+    }
+
+    /**
+     * Get the logged-in user's assigned group ID, if any.
+     * Returns null for Super Admins or department-wide users.
+     */
+    public static function assignedGroupId(): ?int
+    {
+        $u = self::user();
+        if (!$u || self::isSuperAdmin()) {
+            return null;
+        }
+        return !empty($u['assigned_group_id']) ? (int)$u['assigned_group_id'] : null;
+    }
+
+    /**
      * Get the logged-in user's assigned department, if any.
      * Returns null for Super Admins or corporate users who can view all departments.
      */
@@ -90,11 +144,11 @@ class AuthService
     }
 
     /**
-     * Check if the logged-in user is restricted to a specific department.
+     * Check if the logged-in user is restricted to a specific department or group.
      */
     public static function isDepartmentRestricted(): bool
     {
-        return self::userDepartment() !== null;
+        return self::userDepartment() !== null || self::assignedGroupId() !== null;
     }
 
     /**
@@ -102,6 +156,15 @@ class AuthService
      */
     public static function canAccessGroup(int $groupId): bool
     {
+        if (self::isSuperAdmin()) {
+            return true;
+        }
+
+        $assignedGroup = self::assignedGroupId();
+        if ($assignedGroup !== null) {
+            return $assignedGroup === $groupId;
+        }
+
         $dept = self::userDepartment();
         if ($dept === null) {
             return true;
@@ -120,6 +183,19 @@ class AuthService
      */
     public static function canAccessMessage(int $messageId): bool
     {
+        if (self::isSuperAdmin()) {
+            return true;
+        }
+
+        $assignedGroup = self::assignedGroupId();
+        if ($assignedGroup !== null) {
+            $tracked = Database::fetch("SELECT group_id FROM tracked_messages WHERE id = :id", [':id' => $messageId]);
+            if (!$tracked) {
+                return false;
+            }
+            return (int)$tracked['group_id'] === $assignedGroup;
+        }
+
         $dept = self::userDepartment();
         if ($dept === null) {
             return true;
@@ -253,6 +329,7 @@ class AuthService
             'email' => $user['email'],
             'role' => $user['role'],
             'department' => $user['department'] ?? null,
+            'assigned_group_id' => !empty($user['assigned_group_id']) ? (int)$user['assigned_group_id'] : null,
         ];
         $_SESSION['last_activity'] = time();
 

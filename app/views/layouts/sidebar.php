@@ -7,12 +7,14 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? '';
 $roleLabel = match($user['role'] ?? '') {
     'super_admin' => 'Super Admin',
     'owner' => 'Owner',
+    'user' => 'Normal User',
     'viewer' => 'Viewer',
     default => ucfirst($user['role'] ?? 'User')
 };
 $roleBadgeClass = match($user['role'] ?? '') {
     'super_admin' => 'bg-warning text-dark border border-warning',
     'owner' => 'bg-primary text-white',
+    'user' => 'bg-info-subtle text-info-emphasis border border-info-subtle',
     default => 'bg-secondary text-white'
 };
 ?>
@@ -42,8 +44,12 @@ $roleBadgeClass = match($user['role'] ?? '') {
                 <?php if ($isSuperAdmin): ?><i class="bi bi-shield-lock-fill me-1"></i><?php endif; ?>
                 <?= $roleLabel ?>
             </span>
-            <?php if (!empty($user['department']) && strcasecmp($user['department'], 'all') !== 0): ?>
-                <span class="badge bg-info-subtle text-info border border-info-subtle ms-1" style="font-size: 0.62rem;" title="Department Restriced Access">
+            <?php if (!empty($user['assigned_group_id'])): ?>
+                <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 0.62rem;" title="Assigned Telegram Group">
+                    <i class="bi bi-chat-quote-fill me-1"></i>Group #<?= (int)$user['assigned_group_id'] ?>
+                </span>
+            <?php elseif (!empty($user['department']) && strcasecmp($user['department'], 'all') !== 0): ?>
+                <span class="badge bg-info-subtle text-info border border-info-subtle ms-1" style="font-size: 0.62rem;" title="Department Restricted Access">
                     <i class="bi bi-building me-1"></i><?= e($user['department']) ?>
                 </span>
             <?php endif; ?>
@@ -88,12 +94,14 @@ $roleBadgeClass = match($user['role'] ?? '') {
 
         <div class="nav-section-label">SYSTEM &amp; DOCS</div>
         <ul class="nav flex-column mb-3">
-            <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'audit') ? 'active' : '' ?>" href="<?= url('audit') ?>">
-                    <i class="bi bi-shield-check me-2"></i>
-                    <span>Audit Logs</span>
-                </a>
-            </li>
+            <?php if ($isOwner): ?>
+                <li class="nav-item">
+                    <a class="nav-link <?= str_contains($currentUri, 'audit') ? 'active' : '' ?>" href="<?= url('audit') ?>">
+                        <i class="bi bi-shield-check me-2"></i>
+                        <span>Audit Logs</span>
+                    </a>
+                </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard/about') ?>">
                     <i class="bi bi-info-circle-fill me-2"></i>
