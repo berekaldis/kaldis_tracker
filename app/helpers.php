@@ -6,6 +6,26 @@
 
 use App\Services\AuthService;
 
+// Auto-load .env file if present
+$envFile = dirname(__DIR__) . '/.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+            continue;
+        }
+        [$k, $v] = explode('=', $trimmed, 2);
+        $k = trim($k);
+        $v = trim($v, " \t\n\r\0\x0B\"'");
+        if (!array_key_exists($k, $_SERVER) && !array_key_exists($k, $_ENV)) {
+            putenv("{$k}={$v}");
+            $_ENV[$k] = $v;
+            $_SERVER[$k] = $v;
+        }
+    }
+}
+
 if (!function_exists('config')) {
     function config(string $key, mixed $default = null): mixed
     {
@@ -127,6 +147,12 @@ if (!function_exists('url')) {
     function url(string $path = ''): string
     {
         $base = rtrim(config('app.url', ''), '/');
+        if (empty($base)) {
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+            $base = $scheme . '://' . $host . rtrim($scriptDir, '/\\');
+        }
         $path = ltrim($path, '/');
         return $path === '' ? $base : $base . '/' . $path;
     }
