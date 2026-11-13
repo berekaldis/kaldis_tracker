@@ -168,7 +168,7 @@ class TelegramService
     /**
      * Send text message.
      */
-    public function sendMessage(int|string $chatId, string $text, ?int $replyToMessageId = null): array
+    public function sendMessage(int|string $chatId, string $text, ?int $replyToMessageId = null, ?int $threadId = null): array
     {
         $params = [
             'chat_id' => $chatId,
@@ -180,13 +180,17 @@ class TelegramService
             $params['reply_to_message_id'] = $replyToMessageId;
         }
 
+        if ($threadId !== null) {
+            $params['message_thread_id'] = $threadId;
+        }
+
         return $this->request('sendMessage', $params);
     }
 
     /**
      * Send message with inline keyboard buttons.
      */
-    public function sendMessageWithKeyboard(int|string $chatId, string $text, array $inlineKeyboard, ?int $replyToMessageId = null): array
+    public function sendMessageWithKeyboard(int|string $chatId, string $text, array $inlineKeyboard, ?int $replyToMessageId = null, ?int $threadId = null): array
     {
         $params = [
             'chat_id' => $chatId,
@@ -199,6 +203,10 @@ class TelegramService
 
         if ($replyToMessageId !== null) {
             $params['reply_to_message_id'] = $replyToMessageId;
+        }
+
+        if ($threadId !== null) {
+            $params['message_thread_id'] = $threadId;
         }
 
         return $this->request('sendMessage', $params);

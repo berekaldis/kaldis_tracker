@@ -75,7 +75,13 @@ class TrackedMessageController
             ':sender_id' => $message['telegram_user_id'],
         ]);
 
-        // Normalize status for members who have no response row yet
+        // Compute stats for header summary
+        $dashboardCtrl = new DashboardController();
+        $stats = $dashboardCtrl->calculateMessageStats($messageId, (int)$message['group_id'], $message['message_date']);
+
+        $msgTimestamp = strtotime($message['message_date']);
+
+        // Normalize status & calculate individual turnaround times
         foreach ($members as &$m) {
             if (empty($m['status'])) {
                 if ($m['member_source'] === 'imported') {
@@ -84,12 +90,19 @@ class TrackedMessageController
                     $m['status'] = 'unknown';
                 }
             }
+
+            $m['turnaround_seconds'] = null;
+            $m['turnaround_formatted'] = '—';
+            if ($m['status'] === 'replied' && !empty($m['response_date'])) {
+                $respTime = strtotime($m['response_date']);
+                $diff = max(0, $respTime - $msgTimestamp);
+                $m['turnaround_seconds'] = $diff;
+                $m['turnaround_formatted'] = format_duration($diff);
+            }
+
+            $m['is_overdue'] = (!empty($stats['is_overdue']) && in_array($m['status'], ['not_replied', 'unknown']));
         }
         unset($m);
-
-        // Compute stats for header summary
-        $dashboardCtrl = new DashboardController();
-        $stats = $dashboardCtrl->calculateMessageStats($messageId, (int)$message['group_id'], $message['message_date']);
 
         view('messages.view', [
             'message' => $message,
@@ -113,6 +126,7 @@ class TrackedMessageController
         $messageText = trim($_POST['message_text'] ?? '');
         $dateInput = trim($_POST['message_date'] ?? '');
         $threadId = !empty($_POST['thread_id']) ? (int)$_POST['thread_id'] : null;
+        $deadlineInput = trim($_POST['deadline_at'] ?? '');
 
         if (!$groupId || empty($telegramMessageId) || empty($messageText)) {
             flash('danger', 'Please provide Group, Telegram Message ID, and Message Content.');
@@ -142,6 +156,16 @@ class TrackedMessageController
             } catch (\Exception) {}
         }
 
+        $deadlineUtc = null;
+        if (!empty($deadlineInput)) {
+            try {
+                $appTz = new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'));
+                $utcTz = new DateTimeZone('UTC');
+                $dt = new DateTimeImmutable($deadlineInput, $appTz);
+                $deadlineUtc = $dt->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
         $tracker = new MessageTrackingService();
         try {
             $result = $tracker->registerTrackedMessage(
@@ -151,7 +175,8 @@ class TrackedMessageController
                 $threadId,
                 $messageText,
                 $utcDate,
-                'dashboard'
+                'dashboard',
+                $deadlineUtc
             );
 
             flash('success', "Message #{$telegramMessageId} in '{$group['title']}' is now tracked!");
@@ -230,17 +255,29 @@ class TrackedMessageController
             ':sender_id' => $message['telegram_user_id'],
         ]);
 
+        $dashboardCtrl = new DashboardController();
+        $stats = $dashboardCtrl->calculateMessageStats($messageId, (int)$message['group_id'], $message['message_date']);
+
+        $msgTime = strtotime($message['message_date']);
         foreach ($members as &$m) {
             if (empty($m['status'])) {
                 $m['status'] = ($m['member_source'] === 'imported') ? 'not_replied' : 'unknown';
             }
             $m['formatted_date'] = !empty($m['response_date']) ? format_tz($m['response_date']) : '—';
             $m['display_text'] = !empty($m['response_text']) ? e(mb_strimwidth($m['response_text'], 0, 140, '...')) : '—';
+
+            $m['turnaround_seconds'] = null;
+            $m['turnaround_formatted'] = '—';
+            if ($m['status'] === 'replied' && !empty($m['response_date'])) {
+                $respTime = strtotime($m['response_date']);
+                $diff = max(0, $respTime - $msgTime);
+                $m['turnaround_seconds'] = $diff;
+                $m['turnaround_formatted'] = format_duration($diff);
+            }
+
+            $m['is_overdue'] = (!empty($stats['is_overdue']) && in_array($m['status'], ['not_replied', 'unknown']));
         }
         unset($m);
-
-        $dashboardCtrl = new DashboardController();
-        $stats = $dashboardCtrl->calculateMessageStats($messageId, (int)$message['group_id'], $message['message_date']);
 
         echo json_encode([
             'ok' => true,
@@ -249,6 +286,224 @@ class TrackedMessageController
             'synced_at' => format_tz(utc_now(), 'h:i:s A'),
         ]);
         exit;
+    }
+
+    /**
+     * Send an interactive reminder to non-repliers directly in the Telegram group.
+     */
+    public function sendReminder(): void
+    {
+        AuthService::requireCanTrack();
+        AuthService::verifyCsrf();
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
+        $customNote = trim($_POST['custom_note'] ?? '');
+
+        $message = Database::fetch(
+            "SELECT tm.*, tg.telegram_chat_id, tg.title AS group_title 
+             FROM tracked_messages tm
+             JOIN telegram_groups tg ON tm.group_id = tg.id
+             WHERE tm.id = :id",
+            [':id' => $messageId]
+        );
+
+        if (!$message) {
+            flash('danger', 'Tracked message not found.');
+            redirect(url('dashboard'));
+        }
+
+        // Fetch pending / unreplied members
+        $sql = "SELECT m.full_name, m.username, m.telegram_user_id
+                FROM group_members gm
+                JOIN members m ON gm.member_id = m.id
+                LEFT JOIN message_responses mr ON mr.tracked_message_id = :tmid AND mr.member_telegram_user_id = m.telegram_user_id
+                WHERE gm.group_id = :gid 
+                  AND gm.joined_at <= :mdate1 
+                  AND (gm.left_at IS NULL OR gm.left_at > :mdate2)
+                  AND m.is_bot = 0
+                  AND m.telegram_user_id != :sender_id
+                  AND (mr.status IS NULL OR mr.status = 'unknown')
+                ORDER BY m.full_name ASC";
+
+        $pendingMembers = Database::fetchAll($sql, [
+            ':tmid' => $messageId,
+            ':gid' => $message['group_id'],
+            ':mdate1' => $message['message_date'],
+            ':mdate2' => $message['message_date'],
+            ':sender_id' => $message['telegram_user_id'],
+        ]);
+
+        if (empty($pendingMembers)) {
+            flash('info', 'All eligible members have already replied! No reminder needed.');
+            redirect(url('messages/view?id=' . $messageId));
+        }
+
+        $mentions = [];
+        foreach ($pendingMembers as $pm) {
+            if (!empty($pm['username'])) {
+                $mentions[] = '@' . $pm['username'];
+            } else {
+                $mentions[] = $pm['full_name'];
+            }
+        }
+        $mentionStr = implode(' ', $mentions);
+
+        $text = "⏰ <b>Kaldi's Coffee Reminder: Response Required</b>\n\n";
+        $text .= "Team members pending acknowledgment for this announcement:\n";
+        $text .= "👉 " . e($mentionStr) . "\n\n";
+
+        if (!empty($customNote)) {
+            $text .= "📝 <b>Note:</b> " . e($customNote) . "\n\n";
+        }
+
+        $text .= "<i>Please reply directly to the message above to confirm.</i>";
+
+        $tg = new \App\Services\TelegramService();
+        $resp = $tg->sendMessage(
+            $message['telegram_chat_id'],
+            $text,
+            (int)$message['telegram_message_id'],
+            !empty($message['thread_id']) ? (int)$message['thread_id'] : null
+        );
+
+        if (!empty($resp['ok'])) {
+            AuditService::log('telegram_reminder_sent', 'tracked_message', (string)$messageId, [
+                'pending_count' => count($pendingMembers),
+                'group_id' => $message['group_id'],
+                'chat_id' => $message['telegram_chat_id'],
+            ]);
+            flash('success', "Reminder sent to " . count($pendingMembers) . " pending member(s) in Telegram!");
+        } else {
+            flash('danger', 'Failed to send Telegram reminder: ' . ($resp['description'] ?? 'Unknown error'));
+        }
+
+        redirect(url('messages/view?id=' . $messageId));
+    }
+
+    /**
+     * Broadcast an official status report directly into the Telegram group.
+     */
+    public function sendSummaryReport(): void
+    {
+        AuthService::requireCanTrack();
+        AuthService::verifyCsrf();
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
+
+        $message = Database::fetch(
+            "SELECT tm.*, tg.telegram_chat_id, tg.title AS group_title 
+             FROM tracked_messages tm
+             JOIN telegram_groups tg ON tm.group_id = tg.id
+             WHERE tm.id = :id",
+            [':id' => $messageId]
+        );
+
+        if (!$message) {
+            flash('danger', 'Tracked message not found.');
+            redirect(url('dashboard'));
+        }
+
+        $dashboardCtrl = new DashboardController();
+        $stats = $dashboardCtrl->calculateMessageStats($messageId, (int)$message['group_id'], $message['message_date']);
+
+        $excerpt = mb_strimwidth($message['message_text'], 0, 90, '...');
+
+        $text = "📊 <b>Kaldi's Coffee &bull; Reply Status Report</b>\n\n";
+        $text .= "<b>Group:</b> " . e($message['group_title']) . "\n";
+        $text .= "<b>Notice:</b> <i>\"" . e($excerpt) . "\"</i>\n\n";
+        $text .= "👥 <b>Eligible Roster:</b> {$stats['eligible']}\n";
+        $text .= "✅ <b>Replied:</b> {$stats['replied']} (" . number_format($stats['percentage'], 1) . "%)\n";
+        $text .= "⏳ <b>Pending:</b> {$stats['not_replied']}\n";
+
+        if (!empty($stats['avg_turnaround_formatted']) && $stats['avg_turnaround_formatted'] !== '—') {
+            $text .= "⚡ <b>Avg Turnaround:</b> {$stats['avg_turnaround_formatted']}\n";
+        }
+        if (!empty($stats['is_overdue'])) {
+            $text .= "🔴 <b>Status:</b> SLA Overdue\n";
+        }
+
+        $text .= "\n<i>Generated from Kaldi's Management Portal</i>";
+
+        $tg = new \App\Services\TelegramService();
+        $resp = $tg->sendMessage(
+            $message['telegram_chat_id'],
+            $text,
+            (int)$message['telegram_message_id'],
+            !empty($message['thread_id']) ? (int)$message['thread_id'] : null
+        );
+
+        if (!empty($resp['ok'])) {
+            AuditService::log('telegram_summary_posted', 'tracked_message', (string)$messageId, [
+                'stats' => $stats,
+                'chat_id' => $message['telegram_chat_id']
+            ]);
+            flash('success', 'Status summary posted directly to Telegram group!');
+        } else {
+            flash('danger', 'Failed to post summary to Telegram: ' . ($resp['description'] ?? 'Unknown error'));
+        }
+
+        redirect(url('messages/view?id=' . $messageId));
+    }
+
+    /**
+     * Set or update message deadline / SLA.
+     */
+    public function setDeadline(): void
+    {
+        AuthService::requireCanTrack();
+        AuthService::verifyCsrf();
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        AuthService::requireMessageAccess($messageId);
+        $preset = trim($_POST['preset'] ?? '');
+        $customDate = trim($_POST['deadline_at'] ?? '');
+
+        $message = Database::fetch("SELECT * FROM tracked_messages WHERE id = :id", [':id' => $messageId]);
+        if (!$message) {
+            flash('danger', 'Tracked message not found.');
+            redirect(url('dashboard'));
+        }
+
+        $deadlineUtc = null;
+        $msgUtc = new DateTimeImmutable($message['message_date'], new DateTimeZone('UTC'));
+
+        if ($preset === '30m') {
+            $deadlineUtc = $msgUtc->modify('+30 minutes')->format('Y-m-d H:i:s');
+        } elseif ($preset === '1h') {
+            $deadlineUtc = $msgUtc->modify('+1 hour')->format('Y-m-d H:i:s');
+        } elseif ($preset === '2h') {
+            $deadlineUtc = $msgUtc->modify('+2 hours')->format('Y-m-d H:i:s');
+        } elseif ($preset === '4h') {
+            $deadlineUtc = $msgUtc->modify('+4 hours')->format('Y-m-d H:i:s');
+        } elseif ($preset === '24h') {
+            $deadlineUtc = $msgUtc->modify('+24 hours')->format('Y-m-d H:i:s');
+        } elseif (!empty($customDate)) {
+            try {
+                $appTz = new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'));
+                $utcTz = new DateTimeZone('UTC');
+                $dt = new DateTimeImmutable($customDate, $appTz);
+                $deadlineUtc = $dt->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
+        Database::execute(
+            "UPDATE tracked_messages SET deadline_at = :dl, updated_at = :now WHERE id = :id",
+            [':dl' => $deadlineUtc, ':now' => utc_now(), ':id' => $messageId]
+        );
+
+        AuditService::log('tracked_message_deadline_updated', 'tracked_message', (string)$messageId, [
+            'deadline_at' => $deadlineUtc
+        ]);
+
+        if ($deadlineUtc) {
+            flash('success', 'Deadline updated to ' . format_tz($deadlineUtc) . ' (EAT).');
+        } else {
+            flash('info', 'Deadline cleared.');
+        }
+
+        redirect(url('messages/view?id=' . $messageId));
     }
 
     /**
@@ -507,18 +762,27 @@ class TrackedMessageController
         header('Content-Disposition: attachment; filename="' . $filename . '"');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['Full Name', 'Telegram User ID', 'Username', 'Status', 'Matching Method', 'Reply Text', 'Reply Date (Addis Ababa)', 'Reason / Notes']);
+        fputcsv($output, ['Full Name', 'Telegram User ID', 'Username', 'Status', 'Turnaround Time', 'Matching Method', 'Reply Text', 'Reply Date (Addis Ababa)', 'Reason / Notes']);
+
+        $msgTime = strtotime($message['message_date']);
 
         foreach ($members as $m) {
             $status = $m['status'];
             if (empty($status)) {
                 $status = ($m['member_source'] === 'imported') ? 'not_replied' : 'unknown';
             }
+
+            $turnaround = '—';
+            if ($status === 'replied' && !empty($m['response_date'])) {
+                $turnaround = format_duration(max(0, strtotime($m['response_date']) - $msgTime));
+            }
+
             fputcsv($output, [
                 $m['full_name'],
                 $m['telegram_user_id'],
                 !empty($m['username']) ? '@' . $m['username'] : '',
                 ucfirst(str_replace('_', ' ', $status)),
+                $turnaround,
                 !empty($m['matching_method']) ? ucfirst(str_replace('_', ' ', $m['matching_method'])) : '',
                 $m['response_text'] ?? '',
                 !empty($m['response_date']) ? format_tz($m['response_date']) : '',

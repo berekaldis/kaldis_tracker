@@ -183,6 +183,9 @@ match (true) {
     $path === 'messages/exclude-member' && $requestMethod === 'POST' => (new TrackedMessageController())->excludeMember(),
     $path === 'messages/include-member' && $requestMethod === 'POST' => (new TrackedMessageController())->includeMember(),
     $path === 'messages/manual-reply' && $requestMethod === 'POST' => (new TrackedMessageController())->manualMarkReplied(),
+    $path === 'messages/send-reminder' && $requestMethod === 'POST' => (new TrackedMessageController())->sendReminder(),
+    $path === 'messages/send-summary' && $requestMethod === 'POST' => (new TrackedMessageController())->sendSummaryReport(),
+    $path === 'messages/set-deadline' && $requestMethod === 'POST' => (new TrackedMessageController())->setDeadline(),
     $path === 'messages/export' && $requestMethod === 'GET' => (new TrackedMessageController())->exportCsv(),
 
     // Real-Time Live API routes

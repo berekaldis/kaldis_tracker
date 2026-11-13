@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS `tg_tracked_messages` (
   `reference_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `message_text` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `message_date` datetime NOT NULL,
+  `deadline_at` datetime DEFAULT NULL,
   `edited_at` datetime DEFAULT NULL,
   `tracking_source` enum('hashtag','command','dashboard','auto') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'auto',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',

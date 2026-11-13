@@ -44,6 +44,7 @@ class MessageTrackingService
                 'my_chat_member' => $this->handleMyChatMember($payload['my_chat_member']),
                 'chat_member' => $this->handleChatMember($payload['chat_member']),
                 'callback_query' => $this->handleCallbackQuery($payload['callback_query']),
+                'message_reaction' => $this->handleMessageReaction($payload['message_reaction']),
                 default => ['status' => 'ignored', 'type' => $updateType],
             };
 
@@ -517,15 +518,16 @@ class MessageTrackingService
         ?int $threadId,
         string $text,
         string $date,
-        string $source = 'hashtag'
+        string $source = 'hashtag',
+        ?string $deadlineAt = null
     ): array {
         // Extract reference code if present (e.g. #task-123 or #123)
         $referenceCode = $this->extractReferenceCode($text);
 
         try {
             $sql = "INSERT INTO tracked_messages 
-                    (group_id, telegram_message_id, telegram_user_id, thread_id, reference_code, message_text, message_date, tracking_source, created_at, updated_at)
-                    VALUES (:gid, :mid, :uid, :tid, :ref, :text, :mdate, :source, :created_at, :updated_at)";
+                    (group_id, telegram_message_id, telegram_user_id, thread_id, reference_code, message_text, message_date, deadline_at, tracking_source, created_at, updated_at)
+                    VALUES (:gid, :mid, :uid, :tid, :ref, :text, :mdate, :deadline, :source, :created_at, :updated_at)";
 
             $now = utc_now();
             Database::execute($sql, [
@@ -536,6 +538,7 @@ class MessageTrackingService
                 ':ref' => $referenceCode,
                 ':text' => $text,
                 ':mdate' => $date,
+                ':deadline' => $deadlineAt,
                 ':source' => $source,
                 ':created_at' => $now,
                 ':updated_at' => $now,
@@ -998,6 +1001,96 @@ class MessageTrackingService
         $tg = new TelegramService();
         $tg->answerCallbackQuery($callbackId, "Received.");
         return ['status' => 'ignored', 'reason' => 'unknown_callback_data'];
+    }
+
+    /**
+     * Handle message_reaction update (Emoji reactions on tracked messages).
+     * Staff reacting with 👍, ❤️, 🔥, 👌, ✅ are automatically recorded as having replied/acknowledged.
+     */
+    public function handleMessageReaction(array $reaction): array
+    {
+        $chat = $reaction['chat'] ?? [];
+        $chatId = $chat['id'] ?? null;
+        $messageId = (int)($reaction['message_id'] ?? 0);
+        $user = $reaction['user'] ?? null;
+        $date = isset($reaction['date']) ? gmdate('Y-m-d H:i:s', (int)$reaction['date']) : utc_now();
+
+        if (!$chatId || !$messageId || !$user) {
+            return ['status' => 'ignored', 'reason' => 'invalid_reaction_payload'];
+        }
+
+        // Ignore bot reactions
+        if (!empty($user['is_bot'])) {
+            return ['status' => 'ignored', 'reason' => 'bot_reaction'];
+        }
+
+        $group = Database::fetch("SELECT * FROM telegram_groups WHERE telegram_chat_id = :cid", [':cid' => $chatId]);
+        if (!$group || !$group['is_active']) {
+            return ['status' => 'ignored', 'reason' => 'group_not_tracked'];
+        }
+
+        // Find the tracked message by group and message_id
+        $tracked = Database::fetch(
+            "SELECT * FROM tracked_messages WHERE group_id = :gid AND telegram_message_id = :mid AND is_active = 1",
+            [':gid' => $group['id'], ':mid' => $messageId]
+        );
+
+        if (!$tracked) {
+            return ['status' => 'ignored', 'reason' => 'message_not_tracked'];
+        }
+
+        // Author reacting to own message does not count as response
+        $userId = (int)$user['id'];
+        if ((int)$tracked['telegram_user_id'] === $userId) {
+            return ['status' => 'ignored', 'reason' => 'author_reaction'];
+        }
+
+        $member = $this->ensureMemberRecord($user, (int)$group['id'], $date);
+        $memberId = (int)$member['id'];
+
+        // Check new reactions added
+        $newReactions = $reaction['new_reaction'] ?? [];
+        if (empty($newReactions)) {
+            return ['status' => 'reaction_cleared'];
+        }
+
+        // Extract emojis from new reactions
+        $emojis = [];
+        foreach ($newReactions as $r) {
+            if (($r['type'] ?? '') === 'emoji' && !empty($r['emoji'])) {
+                $emojis[] = $r['emoji'];
+            } elseif (($r['type'] ?? '') === 'custom_emoji') {
+                $emojis[] = '⭐';
+            }
+        }
+
+        $emojiStr = !empty($emojis) ? implode(' ', $emojis) : '👍';
+        $responseText = "[Reaction: {$emojiStr}]";
+
+        $this->recordResponse(
+            (int)$tracked['id'],
+            $memberId,
+            $userId,
+            $messageId,
+            $responseText,
+            $date,
+            'replied',
+            'reaction'
+        );
+
+        AuditService::log('message_reaction_recorded', 'tracked_message', (string)$tracked['id'], [
+            'group_id' => $group['id'],
+            'member_id' => $memberId,
+            'telegram_user_id' => $userId,
+            'emojis' => $emojis,
+            'reaction_date' => $date
+        ]);
+
+        return [
+            'status' => 'reaction_recorded',
+            'tracked_message_id' => $tracked['id'],
+            'emojis' => $emojis
+        ];
     }
 
     private function determineUpdateType(array $payload): string

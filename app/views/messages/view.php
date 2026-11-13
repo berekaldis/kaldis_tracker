@@ -5,12 +5,13 @@ $canTrack = AuthService::canTrack();
 $pct = $stats['percentage'];
 $pctColor = $pct >= 80 ? 'success' : ($pct >= 40 ? 'warning' : 'danger');
 
-// Calculate counts for filter tabs
+// Calculate counts for filter tabs & reaction counts
 $countAll = count($members);
 $countReplied = 0;
 $countNotReplied = 0;
 $countPending = 0;
 $countOther = 0;
+$countReactions = 0;
 
 $unrepliedMentions = [];
 foreach ($members as $m) {
@@ -20,6 +21,9 @@ foreach ($members as $m) {
         'pending_review' => $countPending++,
         default => $countOther++
     };
+    if (($m['matching_method'] ?? '') === 'reaction') {
+        $countReactions++;
+    }
     if ($m['status'] === 'not_replied') {
         if (!empty($m['username'])) {
             $unrepliedMentions[] = '@' . $m['username'];
@@ -33,7 +37,7 @@ $unrepliedString = implode(' ', $unrepliedMentions);
 
 <!-- Header / Navigation & Live Indicator -->
 <div class="row align-items-center mb-4">
-    <div class="col-lg-6">
+    <div class="col-lg-5">
         <div class="d-flex align-items-center">
             <a href="<?= url('dashboard') ?>" class="btn btn-outline-secondary btn-sm me-3 shadow-sm">
                 <i class="bi bi-arrow-left"></i> Dashboard
@@ -49,7 +53,7 @@ $unrepliedString = implode(' ', $unrepliedMentions);
             </div>
         </div>
     </div>
-    <div class="col-lg-6 text-lg-end mt-3 mt-lg-0 d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
+    <div class="col-lg-7 text-lg-end mt-3 mt-lg-0 d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
         <!-- Live Sync Status Pill -->
         <div class="d-inline-flex align-items-center bg-white px-3 py-1 rounded-pill border shadow-sm small">
             <span class="pulse-dot" id="livePulseDot"></span>
@@ -60,17 +64,69 @@ $unrepliedString = implode(' ', $unrepliedMentions);
             </button>
         </div>
 
+        <?php if ($canTrack): ?>
+            <!-- Send Telegram Reminder Button -->
+            <button type="button" class="btn btn-sm btn-warning fw-semibold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalSendReminder" title="Tag and remind unreplied members in Telegram">
+                <i class="bi bi-bell-fill me-1"></i> Remind (<?= $countNotReplied ?>)
+            </button>
+
+            <!-- Send Summary to Telegram Button -->
+            <button type="button" class="btn btn-sm btn-outline-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalSendSummary" title="Broadcast reply progress report to Telegram group">
+                <i class="bi bi-broadcast me-1"></i> Post Summary
+            </button>
+
+            <!-- Set SLA Deadline Button -->
+            <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalSetDeadline" title="Set SLA response deadline">
+                <i class="bi bi-stopwatch me-1"></i> SLA Deadline
+            </button>
+        <?php endif; ?>
+
         <!-- Copy Unreplied Button -->
         <button type="button" class="btn btn-sm btn-outline-danger shadow-sm" onclick="copyUnrepliedList()" title="Copy list of members who have not replied">
-            <i class="bi bi-clipboard-check me-1"></i> Copy Unreplied (<?= $countNotReplied ?>)
+            <i class="bi bi-clipboard-check me-1"></i> Copy (<?= $countNotReplied ?>)
         </button>
 
         <!-- Export CSV Button -->
         <a href="<?= url('messages/export?id=' . $message['id']) ?>" class="btn btn-sm btn-outline-secondary shadow-sm" title="Download responses CSV">
-            <i class="bi bi-download me-1"></i> Export CSV
+            <i class="bi bi-download me-1"></i> CSV
         </a>
     </div>
 </div>
+
+<?php if (!empty($stats['is_overdue'])): ?>
+    <!-- SLA Overdue Alert Banner -->
+    <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm border-danger" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-3 me-3 text-danger flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <h6 class="alert-heading fw-bold mb-1">⚠️ SLA Response Deadline Exceeded</h6>
+            <div class="small">
+                The target deadline for this announcement was <strong><?= format_tz($stats['deadline_at']) ?></strong> (EAT).
+                <strong><?= $countNotReplied ?></strong> team member(s) have exceeded the expected response window.
+            </div>
+        </div>
+        <?php if ($canTrack): ?>
+            <button type="button" class="btn btn-sm btn-danger ms-3 shadow-sm flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalSendReminder">
+                <i class="bi bi-bell-fill me-1"></i> Nudge Pending Now
+            </button>
+        <?php endif; ?>
+    </div>
+<?php elseif (!empty($stats['deadline_at'])): ?>
+    <!-- SLA Active Alert Banner -->
+    <div class="alert alert-info-subtle border-info d-flex align-items-center mb-4 shadow-sm" role="alert">
+        <i class="bi bi-clock-history fs-3 me-3 text-info flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <div class="fw-bold mb-0">Active SLA Deadline: <strong><?= format_tz($stats['deadline_at']) ?></strong> (EAT)</div>
+            <div class="small text-muted">
+                <?= $countNotReplied ?> team members still pending. Turnaround target is actively being monitored.
+            </div>
+        </div>
+        <?php if ($canTrack): ?>
+            <button type="button" class="btn btn-sm btn-outline-info ms-3 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalSetDeadline">
+                <i class="bi bi-pencil me-1"></i> Adjust SLA
+            </button>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 
 <!-- Message Original Content Card -->
 <div class="card border-0 shadow-sm mb-4">
@@ -92,6 +148,11 @@ $unrepliedString = implode(' ', $unrepliedMentions);
             <?php if (!empty($message['reference_code'])): ?>
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
                     Ref: <?= e($message['reference_code']) ?>
+                </span>
+            <?php endif; ?>
+            <?php if (!empty($stats['deadline_at'])): ?>
+                <span class="badge <?= $stats['is_overdue'] ? 'bg-danger-subtle text-danger border-danger-subtle' : 'bg-secondary-subtle text-secondary border' ?> border">
+                    <i class="bi bi-alarm me-1"></i> SLA: <?= format_tz($stats['deadline_at'], 'M d, H:i') ?>
                 </span>
             <?php endif; ?>
         </div>
@@ -129,7 +190,7 @@ $unrepliedString = implode(' ', $unrepliedMentions);
         </div>
 
         <!-- 4 Summary Counter Cards -->
-        <div class="row g-3 text-center">
+        <div class="row g-3 text-center mb-3">
             <div class="col-6 col-md-3">
                 <div class="p-3 bg-light rounded border">
                     <div class="text-muted small text-uppercase fw-semibold">Eligible Members</div>
@@ -157,6 +218,32 @@ $unrepliedString = implode(' ', $unrepliedMentions);
                     <div class="fs-3 fw-bold text-warning-emphasis" id="statPending"><?= $stats['pending_review'] + $stats['unknown'] ?></div>
                     <div class="small text-muted">Review required</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Performance & Turnaround KPI Sub-row -->
+        <div class="row g-2 pt-2 border-top align-items-center">
+            <div class="col-md-3 text-center">
+                <span class="text-muted small">⚡ Avg Turnaround:</span>
+                <span class="fw-bold text-dark ms-1 font-monospace" id="statAvgTurnaround"><?= $stats['avg_turnaround_formatted'] ?></span>
+            </div>
+            <div class="col-md-3 text-center">
+                <span class="text-muted small">🚀 Fastest Response:</span>
+                <span class="fw-bold text-success ms-1 font-monospace" id="statFastestTurnaround"><?= $stats['fastest_turnaround_formatted'] ?></span>
+            </div>
+            <div class="col-md-3 text-center">
+                <span class="text-muted small">👍 Emoji Reactions:</span>
+                <span class="fw-bold text-primary ms-1" id="statReactions"><?= $countReactions ?></span>
+            </div>
+            <div class="col-md-3 text-center">
+                <span class="text-muted small">⏰ SLA Status:</span>
+                <?php if (!empty($stats['deadline_at'])): ?>
+                    <span class="fw-bold <?= $stats['is_overdue'] ? 'text-danger' : 'text-success' ?> ms-1" id="statDeadlineText">
+                        <?= $stats['is_overdue'] ? 'OVERDUE' : 'Active Target' ?>
+                    </span>
+                <?php else: ?>
+                    <span class="text-muted ms-1" id="statDeadlineText">No Deadline Set</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -190,7 +277,7 @@ $unrepliedString = implode(' ', $unrepliedMentions);
             <div class="col-md-5">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
-                    <input type="text" id="memberSearchInput" class="form-control" placeholder="Search members or reply text..." oninput="searchMembers()">
+                    <input type="text" id="memberSearchInput" class="form-control" placeholder="Search members, replies, or @usernames..." oninput="searchMembers()">
                 </div>
             </div>
         </div>
@@ -200,18 +287,19 @@ $unrepliedString = implode(' ', $unrepliedMentions);
         <table class="table table-hover align-middle mb-0" id="membersTable">
             <thead class="table-light">
                 <tr>
-                    <th style="min-width: 220px;">Group Member</th>
-                    <th class="text-center" style="width: 130px;">Status</th>
-                    <th style="min-width: 260px;">Response / Content</th>
-                    <th style="min-width: 160px;">Reply Time (EAT)</th>
+                    <th style="min-width: 210px;">Group Member</th>
+                    <th class="text-center" style="width: 120px;">Status</th>
+                    <th style="min-width: 240px;">Response / Content</th>
+                    <th style="min-width: 150px;">Reply Time (EAT)</th>
+                    <th class="text-center" style="width: 120px;">Turnaround</th>
                     <th class="text-center" style="width: 120px;">Method</th>
-                    <th class="text-end" style="width: 180px;">Actions</th>
+                    <th class="text-end" style="width: 160px;">Actions</th>
                 </tr>
             </thead>
             <tbody id="membersTableBody">
                 <?php if (empty($members)): ?>
                     <tr id="emptyRow">
-                        <td colspan="6" class="text-center py-5 text-muted">
+                        <td colspan="7" class="text-center py-5 text-muted">
                             <i class="bi bi-people fs-1 d-block mb-2 text-secondary"></i>
                             <div>No eligible members found active at the message date.</div>
                         </td>
@@ -286,11 +374,48 @@ $unrepliedString = implode(' ', $unrepliedMentions);
                             <td class="date-col small text-muted">
                                 <?= !empty($m['response_date']) ? format_tz($m['response_date']) : '—' ?>
                             </td>
+                            <td class="text-center turnaround-col">
+                                <?php if ($status === 'replied'): ?>
+                                    <?php if (!empty($m['turnaround_formatted']) && $m['turnaround_formatted'] !== '—'): ?>
+                                        <span class="badge bg-light text-dark border font-monospace small" title="Reply turnaround speed">
+                                            <i class="bi bi-lightning-charge text-warning"></i> +<?= e($m['turnaround_formatted']) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-muted small">—</span>
+                                    <?php endif; ?>
+                                <?php elseif ($status === 'not_replied' && !empty($m['is_overdue'])): ?>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle small font-monospace">
+                                        <i class="bi bi-alarm"></i> Overdue
+                                    </span>
+                                <?php else: ?>
+                                    <span class="text-muted small">—</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-center method-col">
                                 <?php if (!empty($m['matching_method'])): ?>
-                                    <span class="badge bg-light text-dark border small text-capitalize">
-                                        <?= str_replace('_', ' ', e($m['matching_method'])) ?>
-                                    </span>
+                                    <?php if ($m['matching_method'] === 'reaction'): ?>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                                            <i class="bi bi-emoji-smile"></i> Reaction
+                                        </span>
+                                    <?php elseif ($m['matching_method'] === 'direct_reply'): ?>
+                                        <span class="badge bg-light text-dark border small">
+                                            <i class="bi bi-reply"></i> Reply
+                                        </span>
+                                    <?php elseif ($m['matching_method'] === 'reference'): ?>
+                                        <span class="badge bg-light text-dark border small">
+                                            <i class="bi bi-hash"></i> Ref
+                                        </span>
+                                    <?php elseif ($m['matching_method'] === 'hashtag'): ?>
+                                        <span class="badge bg-light text-dark border small">#Hashtag</span>
+                                    <?php elseif ($m['matching_method'] === 'manual'): ?>
+                                        <span class="badge bg-light text-secondary border small">
+                                            <i class="bi bi-person-check"></i> Manual
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-light text-dark border small text-capitalize">
+                                            <?= str_replace('_', ' ', e($m['matching_method'])) ?>
+                                        </span>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted small">—</span>
                                 <?php endif; ?>
@@ -353,6 +478,143 @@ $unrepliedString = implode(' ', $unrepliedMentions);
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Modal: Send Telegram Group Reminder -->
+<div class="modal fade" id="modalSendReminder" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="<?= url('messages/send-reminder') ?>" method="POST" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="message_id" value="<?= $message['id'] ?>">
+            <div class="modal-header bg-warning-subtle text-dark">
+                <h6 class="modal-title fw-bold">
+                    <i class="bi bi-bell-fill text-warning me-2"></i> Send Telegram Group Reminder
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">
+                    This will dispatch a targeted notification directly into <strong><?= e($message['group_title']) ?></strong> replying to message #<?= e($message['telegram_message_id']) ?> and pinging all team members awaiting acknowledgment.
+                </p>
+                <div class="p-2 mb-3 bg-light rounded border small">
+                    <div class="fw-semibold text-dark mb-1">
+                        Pending Members (<span id="reminderCount"><?= $countNotReplied ?></span>):
+                    </div>
+                    <div class="text-muted text-break" style="max-height: 90px; overflow-y: auto;" id="reminderMemberList">
+                        <?= !empty($unrepliedString) ? e($unrepliedString) : '<em>All members have already replied!</em>' ?>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Custom Reminder Note (Optional)</label>
+                    <textarea name="custom_note" class="form-control form-control-sm" rows="2" placeholder="e.g. Please confirm acknowledgment before end of shift."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-warning fw-semibold shadow-sm" <?= $countNotReplied === 0 ? 'disabled' : '' ?>>
+                    <i class="bi bi-send-fill me-1"></i> Broadcast Reminder
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Post Status Summary to Telegram -->
+<div class="modal fade" id="modalSendSummary" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="<?= url('messages/send-summary') ?>" method="POST" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="message_id" value="<?= $message['id'] ?>">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title fw-bold">
+                    <i class="bi bi-bar-chart-line-fill me-2"></i> Broadcast Status Report to Telegram
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Broadcast the live acknowledgment breakdown directly into <strong><?= e($message['group_title']) ?></strong> so the entire team can see response compliance.
+                </p>
+                <div class="p-3 bg-light rounded border font-monospace small mb-3">
+                    <div class="fw-bold mb-1">📊 Kaldi's Coffee • Reply Status Report</div>
+                    <div>Group: <?= e($message['group_title']) ?></div>
+                    <div>👥 Eligible Roster: <?= $stats['eligible'] ?></div>
+                    <div>✅ Replied: <?= $stats['replied'] ?> (<?= number_format($pct, 1) ?>%)</div>
+                    <div>⏳ Pending: <?= $stats['not_replied'] ?></div>
+                    <?php if (!empty($stats['avg_turnaround_formatted']) && $stats['avg_turnaround_formatted'] !== '—'): ?>
+                        <div>⚡ Avg Turnaround: <?= e($stats['avg_turnaround_formatted']) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($stats['is_overdue'])): ?>
+                        <div class="text-danger">🔴 Status: SLA Overdue</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-primary shadow-sm">
+                    <i class="bi bi-broadcast me-1"></i> Post Report to Group
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Set SLA Deadline -->
+<div class="modal fade" id="modalSetDeadline" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="<?= url('messages/set-deadline') ?>" method="POST" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="message_id" value="<?= $message['id'] ?>">
+            <div class="modal-header bg-light">
+                <h6 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-stopwatch text-danger me-2"></i> Set SLA Response Deadline
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Define expected turnaround time for this announcement. Members who do not reply within the SLA will be flagged as overdue.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Quick SLA Presets</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <input type="radio" class="btn-check" name="preset" id="p30m" value="30m" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="p30m">⚡ 30 Mins</label>
+
+                        <input type="radio" class="btn-check" name="preset" id="p1h" value="1h" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="p1h">1 Hour</label>
+
+                        <input type="radio" class="btn-check" name="preset" id="p2h" value="2h" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="p2h">2 Hours</label>
+
+                        <input type="radio" class="btn-check" name="preset" id="p4h" value="4h" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="p4h">4 Hours</label>
+
+                        <input type="radio" class="btn-check" name="preset" id="p24h" value="24h" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="p24h">24 Hours</label>
+
+                        <input type="radio" class="btn-check" name="preset" id="pCustom" value="custom" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="pCustom">Custom...</label>
+
+                        <?php if (!empty($stats['deadline_at'])): ?>
+                            <input type="radio" class="btn-check" name="preset" id="pClear" value="clear" autocomplete="off">
+                            <label class="btn btn-sm btn-outline-danger" for="pClear">Remove Deadline</label>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="mb-3" id="customDeadlineGroup" style="display: none;">
+                    <label class="form-label small fw-semibold">Custom Deadline Date & Time (EAT)</label>
+                    <input type="datetime-local" name="deadline_at" class="form-control form-control-sm" value="<?= !empty($stats['deadline_at']) ? (new DateTimeImmutable($stats['deadline_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa')))->format('Y-m-d\TH:i') : '' ?>">
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-danger shadow-sm">
+                    <i class="bi bi-check2-circle me-1"></i> Save SLA Deadline
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -483,6 +745,13 @@ async function fetchLiveDetails() {
         document.getElementById('statNotReplied').innerText = stats.not_replied;
         document.getElementById('statPending').innerText = stats.pending_review + stats.unknown;
 
+        if (stats.avg_turnaround_formatted) {
+            document.getElementById('statAvgTurnaround').innerText = stats.avg_turnaround_formatted;
+        }
+        if (stats.fastest_turnaround_formatted) {
+            document.getElementById('statFastestTurnaround').innerText = stats.fastest_turnaround_formatted;
+        }
+
         // 3. Update Progress Bar & Percentage Badge
         const pct = stats.percentage;
         const pctColor = pct >= 80 ? 'success' : (pct >= 40 ? 'warning' : 'danger');
@@ -498,7 +767,7 @@ async function fetchLiveDetails() {
 
         // 4. Update Member Rows & Detect New Responses
         let unrepliedList = [];
-        let countReplied = 0, countNotReplied = 0, countPending = 0, countOther = 0;
+        let countReplied = 0, countNotReplied = 0, countPending = 0, countOther = 0, countReactions = 0;
 
         data.members.forEach(m => {
             const uid = m.telegram_user_id;
@@ -511,10 +780,13 @@ async function fetchLiveDetails() {
             } else if (m.status === 'pending_review') countPending++;
             else countOther++;
 
+            if (m.matching_method === 'reaction') {
+                countReactions++;
+            }
+
             if (row) {
                 const prevStatus = row.getAttribute('data-status');
                 if (prevStatus !== m.status) {
-                    // Status changed live! Flash row
                     row.setAttribute('data-status', m.status);
                     row.classList.add('row-highlight-new');
                     setTimeout(() => row.classList.remove('row-highlight-new'), 2500);
@@ -557,14 +829,36 @@ async function fetchLiveDetails() {
                         dateCell.innerText = m.formatted_date;
                     }
 
+                    // Update Turnaround Cell
+                    const turnaroundCell = row.querySelector('.turnaround-col');
+                    if (turnaroundCell) {
+                        if (m.status === 'replied' && m.turnaround_formatted && m.turnaround_formatted !== '—') {
+                            turnaroundCell.innerHTML = `<span class="badge bg-light text-dark border font-monospace small"><i class="bi bi-lightning-charge text-warning"></i> +${m.turnaround_formatted}</span>`;
+                        } else if (m.status === 'not_replied' && m.is_overdue) {
+                            turnaroundCell.innerHTML = `<span class="badge bg-danger-subtle text-danger border border-danger-subtle small font-monospace"><i class="bi bi-alarm"></i> Overdue</span>`;
+                        } else {
+                            turnaroundCell.innerHTML = `<span class="text-muted small">—</span>`;
+                        }
+                    }
+
                     // Update Method Cell
                     const methodCell = row.querySelector('.method-col');
                     if (methodCell && m.matching_method) {
-                        methodCell.innerHTML = `<span class="badge bg-light text-dark border small text-capitalize">${m.matching_method.replace('_', ' ')}</span>`;
+                        let methodHtml = `<span class="badge bg-light text-dark border small text-capitalize">${m.matching_method.replace('_', ' ')}</span>`;
+                        if (m.matching_method === 'reaction') {
+                            methodHtml = `<span class="badge bg-primary-subtle text-primary border border-primary-subtle small"><i class="bi bi-emoji-smile"></i> Reaction</span>`;
+                        } else if (m.matching_method === 'direct_reply') {
+                            methodHtml = `<span class="badge bg-light text-dark border small"><i class="bi bi-reply"></i> Reply</span>`;
+                        }
+                        methodCell.innerHTML = methodHtml;
                     }
                 }
             }
         });
+
+        // Update Reactions Counter
+        const reactStat = document.getElementById('statReactions');
+        if (reactStat) reactStat.innerText = countReactions;
 
         // Update Tab Badges
         document.getElementById('tabCountAll').innerText = data.members.length;
@@ -572,6 +866,14 @@ async function fetchLiveDetails() {
         document.getElementById('tabCountNotReplied').innerText = countNotReplied;
         document.getElementById('tabCountPending').innerText = countPending;
         document.getElementById('tabCountOther').innerText = countOther;
+
+        // Update Reminder Modal Target List & Count
+        const remCount = document.getElementById('reminderCount');
+        if (remCount) remCount.innerText = countNotReplied;
+        const remList = document.getElementById('reminderMemberList');
+        if (remList) {
+            remList.innerHTML = unrepliedList.length > 0 ? unrepliedList.join(' ') : '<em>All members have already replied!</em>';
+        }
 
         // Update Raw Mentions
         document.getElementById('rawUnrepliedMentions').value = unrepliedList.join(' ');
@@ -639,6 +941,18 @@ function searchMembers() {
         r.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
     });
 }
+
+// Preset radio switcher for SLA custom date
+document.querySelectorAll('input[name="preset"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const customGroup = document.getElementById('customDeadlineGroup');
+        if (this.value === 'custom') {
+            customGroup.style.display = 'block';
+        } else {
+            customGroup.style.display = 'none';
+        }
+    });
+});
 
 // Modal Openers
 function openExcludeModal(memberId, userId, name) {

@@ -117,6 +117,25 @@ if (!function_exists('format_tz')) {
     }
 }
 
+if (!function_exists('format_duration')) {
+    function format_duration(?int $seconds): string
+    {
+        if ($seconds === null || $seconds < 0) {
+            return '—';
+        }
+        if ($seconds < 60) {
+            return "{$seconds}s";
+        }
+        if ($seconds < 3600) {
+            $m = (int)round($seconds / 60);
+            return "{$m}m";
+        }
+        $h = (int)floor($seconds / 3600);
+        $m = (int)round(($seconds % 3600) / 60);
+        return $m > 0 ? "{$h}h {$m}m" : "{$h}h";
+    }
+}
+
 if (!function_exists('redirect')) {
     function redirect(string $url): void
     {

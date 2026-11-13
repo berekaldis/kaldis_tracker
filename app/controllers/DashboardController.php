@@ -213,6 +213,43 @@ class DashboardController
         $denominator = $eligibleMembersCount - $excluded - $unknown;
         $percentage = ($denominator > 0) ? (float)round(($replied / $denominator) * 100, 1) : 0.0;
 
+        // Turnaround metrics for replied members
+        $responseTimes = Database::fetchAll(
+            "SELECT TIMESTAMPDIFF(SECOND, :mdate, response_date) AS diff_seconds 
+             FROM message_responses 
+             WHERE tracked_message_id = :tmid AND status = 'replied' AND response_date IS NOT NULL",
+            [':mdate' => $messageDate, ':tmid' => $trackedMessageId]
+        );
+
+        $avgTurnaroundSeconds = null;
+        $fastestTurnaroundSeconds = null;
+        if (!empty($responseTimes)) {
+            $totalSeconds = 0;
+            foreach ($responseTimes as $rt) {
+                $sec = max(0, (int)$rt['diff_seconds']);
+                $totalSeconds += $sec;
+                if ($fastestTurnaroundSeconds === null || $sec < $fastestTurnaroundSeconds) {
+                    $fastestTurnaroundSeconds = $sec;
+                }
+            }
+            $avgTurnaroundSeconds = (int)round($totalSeconds / count($responseTimes));
+        }
+
+        // Deadline and Overdue calculation
+        $deadlineRow = Database::fetch("SELECT deadline_at FROM tracked_messages WHERE id = :id", [':id' => $trackedMessageId]);
+        $deadlineAt = $deadlineRow['deadline_at'] ?? null;
+        $isOverdue = false;
+        $deadlineDiff = null;
+
+        if (!empty($deadlineAt)) {
+            $deadlineTime = strtotime($deadlineAt . ' UTC');
+            $nowTime = time();
+            $deadlineDiff = $deadlineTime - $nowTime;
+            if ($deadlineDiff < 0 && $notReplied > 0) {
+                $isOverdue = true;
+            }
+        }
+
         return [
             'eligible' => $eligibleMembersCount,
             'replied' => $replied,
@@ -222,6 +259,13 @@ class DashboardController
             'excluded' => $excluded,
             'percentage' => $percentage,
             'denominator' => max(0, $denominator),
+            'avg_turnaround_seconds' => $avgTurnaroundSeconds,
+            'avg_turnaround_formatted' => format_duration($avgTurnaroundSeconds),
+            'fastest_turnaround_seconds' => $fastestTurnaroundSeconds,
+            'fastest_turnaround_formatted' => format_duration($fastestTurnaroundSeconds),
+            'deadline_at' => $deadlineAt,
+            'is_overdue' => $isOverdue,
+            'deadline_diff_seconds' => $deadlineDiff,
         ];
     }
 
