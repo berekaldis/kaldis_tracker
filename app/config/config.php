@@ -16,11 +16,11 @@ return [
     ],
 
     'database' => [
-        'host' => '127.0.0.1',
-        'port' => 3306,
-        'name' => 'kaldis_tracker_dev',
-        'user' => 'root',
-        'password' => '',
+        'host' => getenv('DB_HOST') ?: '127.0.0.1',
+        'port' => (int)(getenv('DB_PORT') ?: 3306),
+        'name' => getenv('DB_NAME') ?: 'kaldisbp_ict',
+        'user' => getenv('DB_USER') ?: 'root',
+        'password' => getenv('DB_PASSWORD') ?: '',
         'charset' => 'utf8mb4',
     ],
 
