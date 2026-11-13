@@ -62,8 +62,7 @@ $roleBadgeClass = match($user['role'] ?? '') {
 
     <!-- Navigation Menu Items -->
     <nav class="sidebar-nav custom-scrollbar">
-        <div class="nav-section-label">Monitoring</div>
-        <ul class="nav flex-column mb-2">
+        <ul class="nav flex-column mb-3">
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'dashboard') && !str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard') ?>">
                     <i class="bi bi-speedometer2"></i>
@@ -76,28 +75,22 @@ $roleBadgeClass = match($user['role'] ?? '') {
                     <span>Telegram Groups</span>
                 </a>
             </li>
-        </ul>
 
-        <?php if ($isSuperAdmin): ?>
-            <div class="nav-section-label">Administration</div>
-            <ul class="nav flex-column mb-2">
+            <?php if ($isSuperAdmin): ?>
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'settings/bot') ? 'active' : '' ?>" href="<?= url('settings/bot') ?>">
                         <i class="bi bi-robot"></i>
-                        <span>Bot Configuration</span>
+                        <span>Bot Setup</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'settings/admins') ? 'active' : '' ?>" href="<?= url('settings/admins') ?>">
                         <i class="bi bi-person-gear"></i>
-                        <span>User Management</span>
+                        <span>Users &amp; Access</span>
                     </a>
                 </li>
-            </ul>
-        <?php endif; ?>
+            <?php endif; ?>
 
-        <div class="nav-section-label">System &amp; Info</div>
-        <ul class="nav flex-column mb-3">
             <?php if ($isOwner): ?>
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'audit') ? 'active' : '' ?>" href="<?= url('audit') ?>">
@@ -106,10 +99,11 @@ $roleBadgeClass = match($user['role'] ?? '') {
                     </a>
                 </li>
             <?php endif; ?>
+
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard/about') ?>">
                     <i class="bi bi-info-circle-fill"></i>
-                    <span>About Tracker</span>
+                    <span>About &amp; Help</span>
                 </a>
             </li>
         </ul>

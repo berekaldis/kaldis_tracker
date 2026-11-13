@@ -15,148 +15,118 @@ if ($eatHour < 12) {
     $greeting = 'Good Evening';
 }
 ?>
-<!-- Welcome Banner (companysystem Style) -->
-<div class="card border-0 shadow-sm mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #fffbf2 100%); border-left: 4px solid var(--primary) !important;">
-    <div class="card-body p-4">
-        <div class="row align-items-center">
-            <div class="col-lg-8">
-                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                    <span class="badge bg-amber-subtle text-amber-emphasis border border-warning" style="font-size: 0.72rem;">
-                        <i class="bi bi-cup-hot-fill me-1 text-primary"></i> Kaldi's Coffee
-                    </span>
-                    <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.72rem;">
-                            <i class="bi bi-chat-dots-fill me-1"></i> Tracking Each Conversation
-                        </span>
-                    <?php endif; ?>
-                    <?php if (!empty($userDept)): ?>
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.72rem;">
-                            <i class="bi bi-building me-1"></i> <?= e($userDept) ?> Dept
-                        </span>
-                    <?php endif; ?>
-                </div>
-                <h3 class="fw-bold mb-1" style="color: #78350f; font-size: 1.65rem; letter-spacing: -0.02em;">
-                    <?= $greeting ?>, <?= e($userName) ?>!
-                </h3>
-                <p class="text-secondary small mb-0">
-                    Welcome to Kaldi's Coffee Response Monitoring Dashboard. <span class="fst-italic text-amber-900 fw-medium">"Sip a Coffee, Make a Memory."</span>
-                </p>
-            </div>
-            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0 d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
-                <!-- Live Sync Pill -->
-                <div class="d-inline-flex align-items-center bg-white px-3 py-1.5 rounded-pill border shadow-sm small">
-                    <span class="pulse-dot me-2"></span>
-                    <span class="fw-semibold text-dark me-1" style="font-size: 0.8rem;">Live Updates:</span>
-                    <span id="dashSyncTime" class="text-muted" style="font-size: 0.78rem;">Just now</span>
-                </div>
-                <?php if ($canTrack): ?>
-                    <button type="button" class="btn btn-kaldis shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
-                        <i class="bi bi-pin-angle me-1"></i> Track Message
-                    </button>
-                <?php endif; ?>
-                <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
-                    <i class="bi bi-people me-1"></i> <?= $isOwner ? 'Manage Groups' : 'View Groups' ?>
-                </a>
-            </div>
+<!-- Simple Page Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1 text-dark">
+            <?= $greeting ?>, <?= e($userName) ?>
+        </h3>
+        <p class="text-muted small mb-0">
+            Kaldi's Coffee Response Monitoring
+            <?php if (!empty($userDept)): ?>
+                &bull; <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><?= e($userDept) ?> Dept</span>
+            <?php endif; ?>
+        </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <div class="live-status-pill shadow-sm" title="Real-time live sync active">
+            <span class="pulse-dot"></span>
+            <span id="dashSyncTime">Live</span>
         </div>
+        <?php if ($canTrack): ?>
+            <button type="button" class="btn btn-kaldis btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
+                <i class="bi bi-pin-angle me-1"></i> Track Message
+            </button>
+        <?php endif; ?>
+        <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-people me-1"></i> <?= $isOwner ? 'Groups' : 'View Groups' ?>
+        </a>
     </div>
 </div>
 
-<!-- 4 Summary Cards -->
+<!-- Simple 4 Summary Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-6 col-lg-3">
         <div class="card card-summary p-3 h-100 shadow-sm">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon total me-3">
-                    <i class="bi bi-chat-left-text"></i>
-                </div>
+            <div class="d-flex align-items-center justify-content-between">
                 <div>
                     <div class="stat-label">Total Messages</div>
                     <div class="stat-value text-dark" id="dashTotalMessages"><?= number_format($summary['total_messages']) ?></div>
                 </div>
-            </div>
-            <div class="text-muted small mt-2">
-                Messages tracked matching active filter
+                <div class="stat-icon total">
+                    <i class="bi bi-chat-left-text"></i>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-6 col-lg-3">
         <div class="card card-summary p-3 h-100 shadow-sm">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon replied me-3">
-                    <i class="bi bi-check2-circle"></i>
-                </div>
+            <div class="d-flex align-items-center justify-content-between">
                 <div>
                     <div class="stat-label">With Replies</div>
                     <div class="stat-value text-success" id="dashWithReplies"><?= number_format($summary['messages_with_replies']) ?></div>
                 </div>
-            </div>
-            <div class="text-muted small mt-2">
-                At least one member has responded
+                <div class="stat-icon replied">
+                    <i class="bi bi-check2-circle"></i>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-6 col-lg-3">
         <div class="card card-summary p-3 h-100 shadow-sm">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon unreplied me-3">
-                    <i class="bi bi-x-circle"></i>
-                </div>
+            <div class="d-flex align-items-center justify-content-between">
                 <div>
                     <div class="stat-label">Without Replies</div>
                     <div class="stat-value text-danger" id="dashWithoutReplies"><?= number_format($summary['messages_without_replies']) ?></div>
                 </div>
-            </div>
-            <div class="text-muted small mt-2">
-                Zero confirmed replies received
+                <div class="stat-icon unreplied">
+                    <i class="bi bi-x-circle"></i>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-6 col-lg-3">
         <div class="card card-summary p-3 h-100 shadow-sm">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon pending me-3">
-                    <i class="bi bi-hourglass-split"></i>
-                </div>
+            <div class="d-flex align-items-center justify-content-between">
                 <div>
-                    <div class="stat-label">Total Pending Members</div>
+                    <div class="stat-label">Pending Staff</div>
                     <div class="stat-value text-warning" id="dashPendingMembers"><?= number_format($summary['total_pending_members']) ?></div>
                 </div>
-            </div>
-            <div class="text-muted small mt-2">
-                Confirmed non-replied roster members
+                <div class="stat-icon pending">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Search & Filter Card -->
+<!-- Search & Filter Bar -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-3">
-        <form method="GET" action="<?= url('dashboard') ?>" class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold text-muted mb-1">Search Message Text / Ref</label>
+        <form method="GET" action="<?= url('dashboard') ?>" class="row g-2 align-items-center">
+            <div class="col-md-4">
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" name="search" class="form-control" value="<?= e($filters['search']) ?>" placeholder="Search text or #task...">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" class="form-control" value="<?= e($filters['search']) ?>" placeholder="Search message text or #ref...">
                 </div>
             </div>
 
-            <?php if (!empty($userDept)): ?>
+            <div class="col-md-3">
+                <select name="group_id" class="form-select form-select-sm">
+                    <option value="">All Accessible Groups</option>
+                    <?php foreach ($groups as $g): ?>
+                        <option value="<?= $g['id'] ?>" <?= $filters['group_id'] == $g['id'] ? 'selected' : '' ?>>
+                            <?= e($g['title']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <?php if (empty($userDept)): ?>
                 <div class="col-md-2">
-                    <label class="form-label small fw-semibold text-muted mb-1">Department</label>
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-primary-subtle text-primary border-primary-subtle"><i class="bi bi-building"></i></span>
-                        <input type="text" class="form-control bg-light fw-bold text-primary" value="<?= e($userDept) ?>" readonly>
-                    </div>
-                </div>
-                <div class="col-md-3">
-            <?php else: ?>
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold text-muted mb-1">Department</label>
                     <select name="department" class="form-select form-select-sm">
                         <option value="">All Departments</option>
                         <?php foreach ($departments as $d): ?>
@@ -166,25 +136,9 @@ if ($eatHour < 12) {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
             <?php endif; ?>
-                <label class="form-label small fw-semibold text-muted mb-1">Telegram Group</label>
-                <select name="group_id" class="form-select form-select-sm">
-                    <option value="">All Accessible Groups</option>
-                    <?php foreach ($groups as $g): ?>
-                        <option value="<?= $g['id'] ?>" <?= $filters['group_id'] == $g['id'] ? 'selected' : '' ?>>
-                            <?= e($g['title']) ?> [<?= e($g['department'] ?? 'General') ?>]
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
 
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold text-muted mb-1">Date From</label>
-                <input type="date" name="date_from" class="form-control form-control-sm" value="<?= e($filters['date_from']) ?>">
-            </div>
-
-            <div class="col-md-2 d-flex gap-2">
+            <div class="col-md-3 d-flex gap-2">
                 <button type="submit" class="btn btn-sm btn-dark flex-grow-1">
                     <i class="bi bi-funnel me-1"></i> Filter
                 </button>
@@ -202,10 +156,10 @@ if ($eatHour < 12) {
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0 fw-bold" style="color: var(--kaldis-primary);">
-            <i class="bi bi-table me-2"></i> Tracked Group Messages
+            <i class="bi bi-chat-quote-fill me-2"></i> Tracked Group Messages
         </h5>
-        <span class="badge bg-light text-dark border">
-            Total Records: <?= number_format($filters['total_records']) ?>
+        <span class="badge bg-light text-secondary border">
+            <?= number_format($filters['total_records']) ?> Messages
         </span>
     </div>
 
@@ -213,21 +167,18 @@ if ($eatHour < 12) {
         <table class="table table-hover table-kaldis align-middle mb-0">
             <thead>
                 <tr>
-                    <th style="min-width: 150px;">Date &amp; Time (EAT)</th>
+                    <th style="min-width: 140px;">Date &amp; Time (EAT)</th>
                     <th>Group</th>
-                    <th style="min-width: 250px;">Tracked Message</th>
-                    <th class="text-center">Eligible</th>
-                    <th class="text-center">Replied</th>
-                    <th class="text-center">Not Replied</th>
-                    <th class="text-center">Review / Unknown</th>
-                    <th class="text-center" style="min-width: 140px;">Response %</th>
-                    <th class="text-end">Actions</th>
+                    <th style="min-width: 260px;">Tracked Message</th>
+                    <th class="text-center" style="min-width: 180px;">Replies / Roster</th>
+                    <th class="text-center" style="min-width: 140px;">Response Rate</th>
+                    <th class="text-end">Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($messages)): ?>
                     <tr>
-                        <td colspan="9" class="text-center py-5 text-muted">
+                        <td colspan="6" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
                             <div>No tracked messages found matching your criteria.</div>
                             <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
@@ -249,13 +200,13 @@ if ($eatHour < 12) {
                         <tr id="dashRow_<?= $msg['id'] ?>" data-msg-id="<?= $msg['id'] ?>">
                             <td>
                                 <div class="fw-semibold small"><?= format_tz($msg['message_date'], 'M j, Y') ?></div>
-                                <div class="text-muted small"><?= format_tz($msg['message_date'], 'h:i:s A') ?></div>
+                                <div class="text-muted small"><?= format_tz($msg['message_date'], 'h:i A') ?></div>
                             </td>
                             <td>
                                 <div class="fw-semibold text-truncate" style="max-width: 180px;" title="<?= e($msg['group_title']) ?>">
                                     <?= e($msg['group_title']) ?>
                                 </div>
-                                <span class="badge bg-light text-secondary border font-monospace" style="font-size: 0.7rem;">
+                                <span class="badge bg-light text-secondary border font-monospace" style="font-size: 0.68rem;">
                                     <?= e($msg['telegram_chat_id']) ?>
                                 </span>
                             </td>
@@ -266,41 +217,30 @@ if ($eatHour < 12) {
                                     </span>
                                 <?php endif; ?>
                                 <span class="small text-dark">
-                                    <?= e(mb_strimwidth($msg['message_text'], 0, 110, '...')) ?>
+                                    <?= e(mb_strimwidth($msg['message_text'], 0, 120, '...')) ?>
                                 </span>
                                 <?php if (!empty($msg['edited_at'])): ?>
                                     <span class="badge bg-secondary-subtle text-secondary ms-1" title="Edited on <?= format_tz($msg['edited_at']) ?>">
-                                        <i class="bi bi-pencil-square"></i> edited
+                                        <i class="bi bi-pencil-square"></i>
                                     </span>
                                 <?php endif; ?>
-                            </td>
-                            <td class="text-center fw-semibold" id="dashEligible_<?= $msg['id'] ?>">
-                                <?= $stats['eligible'] ?>
                             </td>
                             <td class="text-center">
-                                <span class="badge badge-status-replied px-2 py-1" id="dashReplied_<?= $msg['id'] ?>">
-                                    <?= $stats['replied'] ?>
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge badge-status-not_replied px-2 py-1" id="dashNotReplied_<?= $msg['id'] ?>">
-                                    <?= $stats['not_replied'] ?>
-                                </span>
-                            </td>
-                            <td class="text-center" id="dashUnknown_<?= $msg['id'] ?>">
-                                <?php if ($stats['pending_review'] > 0): ?>
-                                    <span class="badge badge-status-pending_review me-1" title="Pending Review">
-                                        <?= $stats['pending_review'] ?> review
+                                <div class="d-inline-flex align-items-center gap-1">
+                                    <span class="badge badge-status-replied rounded-pill px-2 py-0.5" id="dashReplied_<?= $msg['id'] ?>" title="Replied">
+                                        <?= $stats['replied'] ?>
                                     </span>
-                                <?php endif; ?>
-                                <?php if ($stats['unknown'] > 0): ?>
-                                    <span class="badge badge-status-unknown" title="Unknown Visibility">
-                                        <?= $stats['unknown'] ?> unk
+                                    <span class="text-muted small">/</span>
+                                    <span class="fw-semibold text-secondary small" id="dashEligible_<?= $msg['id'] ?>" title="Eligible Roster">
+                                        <?= $stats['eligible'] ?>
                                     </span>
-                                <?php endif; ?>
-                                <?php if ($stats['pending_review'] == 0 && $stats['unknown'] == 0): ?>
-                                    <span class="text-muted small">—</span>
-                                <?php endif; ?>
+                                    <span class="badge badge-status-not_replied rounded-pill px-2 py-0.5 ms-1" id="dashNotReplied_<?= $msg['id'] ?>" title="Pending Reply" style="font-size: 0.72rem;">
+                                        <?= $stats['not_replied'] ?> pending
+                                    </span>
+                                    <span id="dashUnknown_<?= $msg['id'] ?>" class="d-none">
+                                        <?= $stats['pending_review'] + $stats['unknown'] ?>
+                                    </span>
+                                </div>
                             </td>
                             <td class="text-center">
                                 <div class="d-flex align-items-center justify-content-center gap-2">
@@ -312,7 +252,7 @@ if ($eatHour < 12) {
                             </td>
                             <td class="text-end">
                                 <a href="<?= url('messages/view?id=' . $msg['id']) ?>" class="btn btn-sm btn-outline-dark">
-                                    <i class="bi bi-eye me-1"></i> View Details
+                                    <i class="bi bi-arrow-right"></i> Details
                                 </a>
                             </td>
                         </tr>
