@@ -29,20 +29,26 @@ if (file_exists($envFile)) {
 if (!function_exists('config')) {
     function config(string $key, mixed $default = null): mixed
     {
-        // Check dynamic database settings first
-        $dbKey = str_replace('.', '_', $key);
-        $dbVal = \App\Services\SettingService::get($dbKey);
-        if ($dbVal !== null && $dbVal !== '') {
-            if ($key === 'telegram.authorized_user_ids' && is_string($dbVal)) {
-                return array_values(array_filter(array_map('trim', explode(',', $dbVal))));
+        // Only check dynamic database settings for telegram config or retention days
+        if (str_starts_with($key, 'telegram.') || $key === 'app.retention_days') {
+            try {
+                $dbKey = str_replace('.', '_', $key);
+                $dbVal = \App\Services\SettingService::get($dbKey);
+                if ($dbVal !== null && $dbVal !== '') {
+                    if ($key === 'telegram.authorized_user_ids' && is_string($dbVal)) {
+                        return array_values(array_filter(array_map('trim', explode(',', $dbVal))));
+                    }
+                    if ($key === 'telegram.track_all_messages') {
+                        return (bool)(int)$dbVal;
+                    }
+                    if ($key === 'app.retention_days') {
+                        return (int)$dbVal;
+                    }
+                    return $dbVal;
+                }
+            } catch (\Throwable) {
+                // Database not yet configured or reachable; fall through to static config
             }
-            if ($key === 'telegram.track_all_messages') {
-                return (bool)(int)$dbVal;
-            }
-            if ($key === 'app.retention_days') {
-                return (int)$dbVal;
-            }
-            return $dbVal;
         }
 
         static $config = null;

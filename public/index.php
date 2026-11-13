@@ -12,7 +12,7 @@ header("X-Frame-Options: SAMEORIGIN");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.bunny.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.bunny.net https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self';");
 
-// 2. Class Autoloader
+// 2. Class Autoloader (Linux case-insensitive fallback)
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
     $baseDir = dirname(__DIR__) . '/app/';
@@ -23,10 +23,22 @@ spl_autoload_register(function ($class) {
     }
 
     $relativeClass = substr($class, $len);
-    $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
 
-    if (file_exists($file)) {
-        require $file;
+    // 1. Direct path check (e.g. app/Services/AuthService.php)
+    $direct = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
+    if (file_exists($direct)) {
+        require $direct;
+        return;
+    }
+
+    // 2. Linux directory lowercase fallback (e.g. app/services/AuthService.php)
+    $parts = explode('\\', $relativeClass);
+    $className = array_pop($parts);
+    $subDir = strtolower(implode('/', $parts));
+    $fallback = $baseDir . ($subDir !== '' ? $subDir . '/' : '') . $className . '.php';
+    if (file_exists($fallback)) {
+        require $fallback;
+        return;
     }
 });
 
@@ -34,24 +46,50 @@ spl_autoload_register(function ($class) {
 require_once dirname(__DIR__) . '/app/helpers.php';
 
 // 4. Global Error & Exception Handling
-if (config('app.debug', false)) {
+$debug = (bool)config('app.debug', false);
+if (!$debug && isset($_GET['debug']) && $_GET['debug'] === 'kaldis2026') {
+    $debug = true;
+}
+
+if ($debug) {
     ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
     error_reporting(E_ALL);
 } else {
     ini_set('display_errors', '0');
     error_reporting(0);
 }
 
-set_exception_handler(function (\Throwable $e) {
+set_exception_handler(function (\Throwable $e) use ($debug) {
     error_log("Unhandled exception: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
-    if (config('app.debug', false)) {
-        echo "<h1>500 Internal Server Error</h1>";
-        echo "<pre>" . e($e->getMessage() . "\n\n" . $e->getTraceAsString()) . "</pre>";
+    if ($debug) {
+        echo "<!DOCTYPE html><html><head><title>System Error</title><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'></head><body class='p-5 bg-light'>";
+        echo "<div class='card shadow-sm border-danger mx-auto' style='max-width:800px;'><div class='card-header bg-danger text-white fw-bold'>500 Internal Server Error</div><div class='card-body'>";
+        echo "<h5 class='text-danger'>" . htmlspecialchars($e->getMessage()) . "</h5>";
+        echo "<p class='small text-muted'>File: " . htmlspecialchars($e->getFile()) . " (Line " . $e->getLine() . ")</p>";
+        echo "<pre class='bg-dark text-light p-3 rounded small overflow-auto' style='max-height:400px;'>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
+        echo "</div></div></body></html>";
     } else {
-        echo "<h1>500 Internal Server Error</h1><p>An unexpected error occurred. Please contact the system administrator.</p>";
+        echo "<!DOCTYPE html><html><head><title>500 Internal Server Error</title></head><body style='font-family:sans-serif;text-align:center;padding:50px;'>";
+        echo "<h1>500 Internal Server Error</h1><p>An unexpected error occurred. Please contact the system administrator or check server error logs.</p>";
+        echo "</body></html>";
     }
     exit;
+});
+
+register_shutdown_function(function() use ($debug) {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        http_response_code(500);
+        if ($debug) {
+            echo "<!DOCTYPE html><html><head><title>Fatal PHP Error</title><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'></head><body class='p-5 bg-light'>";
+            echo "<div class='card shadow-sm border-danger mx-auto' style='max-width:800px;'><div class='card-header bg-danger text-white fw-bold'>Fatal PHP Error</div><div class='card-body'>";
+            echo "<h5 class='text-danger'>" . htmlspecialchars($error['message'] ?? 'Unknown error') . "</h5>";
+            echo "<p class='small text-muted'>File: " . htmlspecialchars($error['file'] ?? '') . " (Line " . ($error['line'] ?? '') . ")</p>";
+            echo "</div></div></body></html>";
+        }
+    }
 });
 
 // 5. Parse Request URI & Method

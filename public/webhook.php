@@ -6,7 +6,7 @@
 
 declare(strict_types=1);
 
-// Class Autoloader
+// Class Autoloader (Linux case-insensitive fallback)
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
     $baseDir = dirname(__DIR__) . '/app/';
@@ -17,10 +17,22 @@ spl_autoload_register(function ($class) {
     }
 
     $relativeClass = substr($class, $len);
-    $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
 
-    if (file_exists($file)) {
-        require $file;
+    // 1. Direct path check
+    $direct = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
+    if (file_exists($direct)) {
+        require $direct;
+        return;
+    }
+
+    // 2. Linux directory lowercase fallback
+    $parts = explode('\\', $relativeClass);
+    $className = array_pop($parts);
+    $subDir = strtolower(implode('/', $parts));
+    $fallback = $baseDir . ($subDir !== '' ? $subDir . '/' : '') . $className . '.php';
+    if (file_exists($fallback)) {
+        require $fallback;
+        return;
     }
 });
 
