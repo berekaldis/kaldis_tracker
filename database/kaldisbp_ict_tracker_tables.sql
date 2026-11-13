@@ -1,15 +1,15 @@
 /* ========================================================
    Kaldi's Coffee Telegram Reply Tracker
-   Database Table Definitions for: kaldisbp_ict
+   Database Schema for: kaldisbp_ict (with 'tg_' prefix)
    Compatible with phpMyAdmin / MySQL 5.7+ / 8.0+ / MariaDB
 ======================================================== */
 
 SET FOREIGN_KEY_CHECKS = 0;
 
 /* --------------------------------------------------------
-   Table structure for `admins`
+   Table structure for `tg_admins`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `admins` (
+CREATE TABLE IF NOT EXISTS `tg_admins` (
   `id` int NOT NULL AUTO_INCREMENT,
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `email` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS `admins` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `system_settings`
+   Table structure for `tg_system_settings`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `system_settings` (
+CREATE TABLE IF NOT EXISTS `tg_system_settings` (
   `setting_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `setting_value` text COLLATE utf8mb4_unicode_ci,
   `updated_at` datetime NOT NULL,
@@ -40,9 +40,9 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `telegram_groups`
+   Table structure for `tg_telegram_groups`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `telegram_groups` (
+CREATE TABLE IF NOT EXISTS `tg_telegram_groups` (
   `id` int NOT NULL AUTO_INCREMENT,
   `telegram_chat_id` bigint NOT NULL,
   `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -66,9 +66,9 @@ CREATE TABLE IF NOT EXISTS `telegram_groups` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `members`
+   Table structure for `tg_members`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `members` (
+CREATE TABLE IF NOT EXISTS `tg_members` (
   `id` int NOT NULL AUTO_INCREMENT,
   `telegram_user_id` bigint NOT NULL,
   `full_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -82,9 +82,9 @@ CREATE TABLE IF NOT EXISTS `members` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `group_members`
+   Table structure for `tg_group_members`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `group_members` (
+CREATE TABLE IF NOT EXISTS `tg_group_members` (
   `id` int NOT NULL AUTO_INCREMENT,
   `group_id` int NOT NULL,
   `member_id` int NOT NULL,
@@ -100,15 +100,13 @@ CREATE TABLE IF NOT EXISTS `group_members` (
   KEY `fk_gm_member` (`member_id`),
   KEY `idx_gm_joined` (`joined_at`),
   KEY `idx_gm_left` (`left_at`),
-  KEY `idx_gm_active` (`group_id`,`is_active`),
-  CONSTRAINT `fk_gm_group` FOREIGN KEY (`group_id`) REFERENCES `telegram_groups` (`id`) ON DELETE RESTRICT,
-  CONSTRAINT `fk_gm_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE RESTRICT
+  KEY `idx_gm_active` (`group_id`,`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `tracked_messages`
+   Table structure for `tg_tracked_messages`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `tracked_messages` (
+CREATE TABLE IF NOT EXISTS `tg_tracked_messages` (
   `id` int NOT NULL AUTO_INCREMENT,
   `group_id` int NOT NULL,
   `telegram_message_id` bigint NOT NULL,
@@ -126,14 +124,13 @@ CREATE TABLE IF NOT EXISTS `tracked_messages` (
   UNIQUE KEY `uq_group_message` (`group_id`,`telegram_message_id`),
   KEY `idx_tm_date` (`message_date`),
   KEY `idx_tm_group` (`group_id`),
-  KEY `idx_tm_ref` (`reference_code`),
-  CONSTRAINT `fk_tm_group` FOREIGN KEY (`group_id`) REFERENCES `telegram_groups` (`id`) ON DELETE RESTRICT
+  KEY `idx_tm_ref` (`reference_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `message_responses`
+   Table structure for `tg_message_responses`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `message_responses` (
+CREATE TABLE IF NOT EXISTS `tg_message_responses` (
   `id` int NOT NULL AUTO_INCREMENT,
   `tracked_message_id` int NOT NULL,
   `member_id` int NOT NULL,
@@ -153,16 +150,13 @@ CREATE TABLE IF NOT EXISTS `message_responses` (
   KEY `fk_mr_member` (`member_id`),
   KEY `fk_mr_reviewer` (`reviewed_by_admin_id`),
   KEY `idx_mr_status` (`status`),
-  KEY `idx_mr_tracked` (`tracked_message_id`),
-  CONSTRAINT `fk_mr_member` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE RESTRICT,
-  CONSTRAINT `fk_mr_reviewer` FOREIGN KEY (`reviewed_by_admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_mr_tracked` FOREIGN KEY (`tracked_message_id`) REFERENCES `tracked_messages` (`id`) ON DELETE RESTRICT
+  KEY `idx_mr_tracked` (`tracked_message_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `telegram_updates`
+   Table structure for `tg_telegram_updates`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `telegram_updates` (
+CREATE TABLE IF NOT EXISTS `tg_telegram_updates` (
   `id` int NOT NULL AUTO_INCREMENT,
   `update_id` bigint NOT NULL,
   `update_type` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -178,9 +172,9 @@ CREATE TABLE IF NOT EXISTS `telegram_updates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `login_attempts`
+   Table structure for `tg_login_attempts`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `login_attempts` (
+CREATE TABLE IF NOT EXISTS `tg_login_attempts` (
   `id` int NOT NULL AUTO_INCREMENT,
   `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL,
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -192,9 +186,9 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
-   Table structure for `audit_logs`
+   Table structure for `tg_audit_logs`
 -------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `audit_logs` (
+CREATE TABLE IF NOT EXISTS `tg_audit_logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `admin_id` int DEFAULT NULL,
   `action` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -208,8 +202,7 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
   KEY `fk_audit_admin` (`admin_id`),
   KEY `idx_audit_action` (`action`),
   KEY `idx_audit_entity` (`entity_type`,`entity_id`),
-  KEY `idx_audit_created` (`created_at`),
-  CONSTRAINT `fk_audit_admin` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE SET NULL
+  KEY `idx_audit_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
@@ -217,14 +210,14 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
    Password for admin:       KaldisAdmin2026!
    Password for superadmin:  KaldisSuperAdmin2026!
 -------------------------------------------------------- */
-INSERT IGNORE INTO `admins` (`id`, `username`, `email`, `password_hash`, `role`, `department`, `is_active`, `created_at`, `updated_at`) VALUES
+INSERT IGNORE INTO `tg_admins` (`id`, `username`, `email`, `password_hash`, `role`, `department`, `is_active`, `created_at`, `updated_at`) VALUES
 (1, 'superadmin', 'superadmin@kaldiscoffee.com', '$2y$10$FERebuoJemShCct.1GaGfOIlajy40IVNreSzwJMc7Q.W3IWCF2ZNu', 'super_admin', NULL, 1, NOW(), NOW()),
 (2, 'admin', 'admin@kaldiscoffee.com', '$2y$10$u.X0wktkcPjwmTE1Sp4YluJaOZQZtLvwIoJDEkqzaVVCUc6EhuJDe', 'super_admin', NULL, 1, NOW(), NOW());
 
 /* --------------------------------------------------------
    Default System Configuration Settings
 -------------------------------------------------------- */
-INSERT IGNORE INTO `system_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES
+INSERT IGNORE INTO `tg_system_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES
 ('app_retention_days', '180', NOW()),
 ('telegram_authorized_user_ids', '814523272, 1626288394, 6492922880', NOW()),
 ('telegram_bot_username', 'kaldis_tracker_bot', NOW()),

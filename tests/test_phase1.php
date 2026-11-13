@@ -53,8 +53,9 @@ $requiredTables = [
     'telegram_updates', 'audit_logs'
 ];
 
+$prefix = Database::getPrefix();
 foreach ($requiredTables as $tbl) {
-    assertTest("Table '{$tbl}' exists", in_array($tbl, $tableNames));
+    assertTest("Table '{$tbl}' exists", in_array($prefix . $tbl, $tableNames) || in_array($tbl, $tableNames));
 }
 
 // Check BIGINT for telegram_chat_id and telegram_user_id

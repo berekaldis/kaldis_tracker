@@ -40,9 +40,49 @@ class Database
         return self::$instance;
     }
 
+    private static ?string $prefix = null;
+
+    public static function getPrefix(): string
+    {
+        if (self::$prefix === null) {
+            $config = require __DIR__ . '/../config/config.php';
+            self::$prefix = $config['database']['prefix'] ?? '';
+        }
+        return self::$prefix;
+    }
+
+    public static function prefixQuery(string $sql): string
+    {
+        $prefix = self::getPrefix();
+        if (empty($prefix)) {
+            return $sql;
+        }
+
+        static $pattern = null;
+        if ($pattern === null) {
+            $tables = [
+                'group_members',
+                'telegram_groups',
+                'tracked_messages',
+                'message_responses',
+                'telegram_updates',
+                'system_settings',
+                'login_attempts',
+                'audit_logs',
+                'members',
+                'admins',
+            ];
+            $pattern = '/(?<!' . preg_quote($prefix, '/') . ')(`?)(' . implode('|', $tables) . ')(`?)(?![a-zA-Z0-9_])/i';
+        }
+
+        return preg_replace_callback($pattern, function ($m) use ($prefix) {
+            return $m[1] . $prefix . $m[2] . $m[3];
+        }, $sql);
+    }
+
     public static function query(string $sql, array $params = []): \PDOStatement
     {
-        $stmt = self::getConnection()->prepare($sql);
+        $stmt = self::getConnection()->prepare(self::prefixQuery($sql));
         $stmt->execute($params);
         return $stmt;
     }

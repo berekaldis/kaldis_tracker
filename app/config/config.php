@@ -22,6 +22,7 @@ return [
         'user' => getenv('DB_USER') ?: 'root',
         'password' => getenv('DB_PASSWORD') ?: '',
         'charset' => 'utf8mb4',
+        'prefix' => getenv('DB_PREFIX') ?: 'tg_',
     ],
 
     'telegram' => [
