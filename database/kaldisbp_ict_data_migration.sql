@@ -9,10 +9,14 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 /* ------------------------------------------------------------------------- */
 /* Table Data: tg_admins (2 rows)                                        */
+/* Default password: kaldis123, email domain: @kaldisbunna.et                */
 /* ------------------------------------------------------------------------- */
-INSERT IGNORE INTO `tg_admins` (`id`, `username`, `email`, `password_hash`, `role`, `department`, `assigned_group_id`, `is_active`, `last_login_at`, `last_login_ip`, `created_at`, `updated_at`) VALUES
-(1, 'superadmin', 'superadmin@kaldiscoffee.com', '$2y$10$FERebuoJemShCct.1GaGfOIlajy40IVNreSzwJMc7Q.W3IWCF2ZNu', 'super_admin', NULL, NULL, 1, '2026-11-13 14:34:48', '127.0.0.1', '2026-11-13 13:43:04', '2026-11-13 13:43:04'),
-(2, 'admin', 'admin@kaldiscoffee.com', '$2y$10$u.X0wktkcPjwmTE1Sp4YluJaOZQZtLvwIoJDEkqzaVVCUc6EhuJDe', 'super_admin', NULL, NULL, 1, '2026-11-13 15:20:12', '127.0.0.1', '2026-10-28 09:09:01', '2026-10-28 09:09:01');
+INSERT INTO `tg_admins` (`id`, `username`, `email`, `password_hash`, `role`, `department`, `assigned_group_id`, `is_active`, `last_login_at`, `last_login_ip`, `created_at`, `updated_at`) VALUES
+(1, 'superadmin', 'superadmin@kaldisbunna.et', '$2y$10$/XvOUnL/6EU6Q9pbUZE12.4eXHxLTBYqbcE/j2YxYaT5tIuwUCvR.', 'super_admin', NULL, NULL, 1, '2026-11-13 14:34:48', '127.0.0.1', '2026-11-13 13:43:04', '2026-11-13 13:43:04'),
+(2, 'admin', 'admin@kaldisbunna.et', '$2y$10$/XvOUnL/6EU6Q9pbUZE12.4eXHxLTBYqbcE/j2YxYaT5tIuwUCvR.', 'super_admin', NULL, NULL, 1, '2026-11-13 15:20:12', '127.0.0.1', '2026-10-28 09:09:01', '2026-10-28 09:09:01')
+ON DUPLICATE KEY UPDATE 
+  `email` = VALUES(`email`), 
+  `password_hash` = VALUES(`password_hash`);
 
 /* ------------------------------------------------------------------------- */
 /* Table Data: tg_system_settings (9 rows)                                        */
@@ -115,6 +119,33 @@ INSERT IGNORE INTO `tg_message_responses` (`id`, `tracked_message_id`, `member_i
 (66, 76, 4, 6492922880, 29, 'Yes I Have', '2026-10-29 14:46:39', 'replied', 'direct_reply', NULL, NULL, NULL, '2026-10-29 14:46:39', '2026-10-29 14:46:39'),
 (67, 76, 6, 1626288394, 30, 'no', '2026-10-29 14:47:38', 'replied', 'direct_reply', NULL, NULL, NULL, '2026-10-29 14:47:38', '2026-10-29 14:47:38'),
 (104, 107, 4, 6492922880, 33, 'Hi All How Are You', '2026-10-30 08:21:20', 'replied', 'direct_reply', NULL, NULL, NULL, '2026-10-30 08:21:20', '2026-10-30 08:21:20');
+
+/* ------------------------------------------------------------------------- */
+/* Table Structure & Data: tg_group_authorized_senders                       */
+/* ------------------------------------------------------------------------- */
+CREATE TABLE IF NOT EXISTS `tg_group_authorized_senders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `group_id` int NOT NULL,
+  `telegram_user_id` bigint NOT NULL,
+  `full_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `username` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_gas_group_user` (`group_id`,`telegram_user_id`),
+  KEY `fk_gas_group` (`group_id`),
+  KEY `idx_gas_user` (`telegram_user_id`),
+  CONSTRAINT `fk_tg_gas_group` FOREIGN KEY (`group_id`) REFERENCES `tg_telegram_groups` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `tg_group_authorized_senders` (`group_id`, `telegram_user_id`, `full_name`, `username`, `notes`, `is_active`, `created_at`, `updated_at`) VALUES
+(21, 814523272, 'Bereket', 'bereket_kaldis', 'Supervisor', 1, NOW(), NOW()),
+(21, 1626288394, 'Berhanu Seyoum', 'bere_sender2', 'Team Lead', 1, NOW(), NOW()),
+(21, 6492922880, 'KALDI\'S Coffee', 'kaldis_official', 'Official Channel', 1, NOW(), NOW()),
+(65, 814523272, 'Bereket', 'bereket_kaldis', 'Airport Manager', 1, NOW(), NOW()),
+(65, 6492922880, 'KALDI\'S Coffee', 'kaldis_official', 'Official Channel', 1, NOW(), NOW());
 
 SET FOREIGN_KEY_CHECKS = 1;
 

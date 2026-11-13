@@ -7,13 +7,15 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? '';
 $roleLabel = match($user['role'] ?? '') {
     'super_admin' => 'Super Admin',
     'owner' => 'Owner',
+    'group_authorizer' => 'Group Authorizer',
     'user' => 'Normal User',
     'viewer' => 'Viewer',
-    default => ucfirst($user['role'] ?? 'User')
+    default => ucfirst(str_replace('_', ' ', $user['role'] ?? 'User'))
 };
 $roleBadgeClass = match($user['role'] ?? '') {
     'super_admin' => 'badge-status-pending_review text-uppercase',
     'owner' => 'bg-slate-900 text-white text-uppercase',
+    'group_authorizer' => 'badge-status-replied text-uppercase',
     'user' => 'badge-status-replied text-uppercase',
     default => 'badge-status-unknown text-uppercase'
 };
@@ -73,6 +75,12 @@ $roleBadgeClass = match($user['role'] ?? '') {
                 <a class="nav-link <?= str_contains($currentUri, 'groups') ? 'active' : '' ?>" href="<?= url('groups') ?>">
                     <i class="bi bi-people-fill"></i>
                     <span>Telegram Groups</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= str_contains($currentUri, 'senders') ? 'active' : '' ?>" href="<?= url('senders') ?>">
+                    <i class="bi bi-person-check-fill"></i>
+                    <span>Authorized Senders</span>
                 </a>
             </li>
 

@@ -169,9 +169,14 @@
             </span>
         </div>
         <div class="card-body p-4">
-            <p class="text-muted small mb-3">
+            <p class="text-muted small mb-2">
                 Messages sent in monitored Telegram groups by any of these <strong>authorized supervisors or managers</strong> will automatically be tracked for team responses.
             </p>
+            <div class="mb-3">
+                <a href="<?= url('senders') ?>" class="btn btn-sm btn-outline-primary shadow-sm">
+                    <i class="bi bi-person-check-fill me-1"></i> Manage Authorized Senders by Specific Group &rarr;
+                </a>
+            </div>
 
             <!-- Visual Senders Chips Container -->
             <div class="p-3 bg-light rounded border mb-3">

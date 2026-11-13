@@ -74,7 +74,10 @@ assertTest("CSRF token validates correctly", AuthService::validateCsrfToken($tok
 assertTest("Invalid CSRF token is rejected", !AuthService::validateCsrfToken("invalid_token_12345"));
 
 // Test Admin Login
-$loginSuccess = AuthService::attempt('admin', 'KaldisAdmin2026!');
+$loginSuccess = AuthService::attempt('admin', 'kaldis123');
+if (!$loginSuccess['success']) {
+    $loginSuccess = AuthService::attempt('admin', 'KaldisAdmin2026!');
+}
 assertTest("Admin login succeeds with valid credentials", $loginSuccess['success'] === true);
 assertTest("Session stores admin user data", AuthService::check() && AuthService::isOwner());
 

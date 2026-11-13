@@ -249,10 +249,20 @@ class SettingsController
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $password = (string)($_POST['password'] ?? '');
-        $role = trim($_POST['role'] ?? 'user');
+        $role = trim($_POST['role'] ?? 'group_authorizer');
         $department = trim($_POST['department'] ?? '');
         $assignedGroupId = !empty($_POST['assigned_group_id']) ? (int)$_POST['assigned_group_id'] : null;
         $deptVal = (empty($department) || strcasecmp($department, 'all') === 0) ? null : $department;
+
+        // Auto-complete domain if omitted
+        if (!empty($email) && !str_contains($email, '@')) {
+            $email .= '@kaldisbunna.et';
+        }
+
+        // Default password if blank
+        if (empty($password)) {
+            $password = 'kaldis123';
+        }
 
         // Auto-assign department if a specific group is chosen without explicit department
         if ($assignedGroupId !== null && empty($deptVal)) {
@@ -262,13 +272,13 @@ class SettingsController
             }
         }
 
-        if (empty($username) || empty($email) || empty($password)) {
-            flash('danger', 'Please provide Username, Email, and Password.');
+        if (empty($username) || empty($email)) {
+            flash('danger', 'Please provide Username and Email.');
             redirect(url('settings/admins'));
         }
 
-        if (!in_array($role, ['super_admin', 'owner', 'user', 'viewer'])) {
-            $role = 'user';
+        if (!in_array($role, ['super_admin', 'owner', 'group_authorizer', 'user', 'viewer'])) {
+            $role = 'group_authorizer';
         }
 
         // Check duplicate
@@ -342,7 +352,7 @@ class SettingsController
         }
 
         $updateRole = $admin['role'];
-        if (!empty($role) && in_array($role, ['super_admin', 'owner', 'user', 'viewer'])) {
+        if (!empty($role) && in_array($role, ['super_admin', 'owner', 'group_authorizer', 'user', 'viewer'])) {
             $updateRole = $role;
         }
 

@@ -61,6 +61,7 @@ class Database
         static $pattern = null;
         if ($pattern === null) {
             $tables = [
+                'group_authorized_senders',
                 'group_members',
                 'telegram_groups',
                 'tracked_messages',

@@ -176,9 +176,8 @@ class MessageTrackingService
         $userId = (int)$from['id'];
         $member = $this->ensureMemberRecord($from, (int)$group['id'], $messageDate);
 
-        // E. Check if this is an authorized user posting a message to track
-        $authorizedUserIds = (array)config('telegram.authorized_user_ids', []);
-        $isAuthorizedUser = in_array((string)$userId, array_map('strval', $authorizedUserIds));
+        // E. Check if this is an authorized sender for this specific group
+        $isAuthorizedUser = $this->isAuthorizedSenderForGroup((int)$group['id'], $userId);
 
         // F. Handle /checkin, /rollcall, or /roster interactive enrollment command
         $botUser = strtolower((string)config('telegram.bot_username', ''));
@@ -830,6 +829,27 @@ class MessageTrackingService
             }
         }
         return null;
+    }
+
+    /**
+     * Check if a Telegram user is an authorized sender for a specific group.
+     */
+    public function isAuthorizedSenderForGroup(int $groupId, int $userId): bool
+    {
+        try {
+            $sender = Database::fetch(
+                "SELECT id FROM group_authorized_senders 
+                 WHERE group_id = :gid AND telegram_user_id = :uid AND is_active = 1",
+                [':gid' => $groupId, ':uid' => $userId]
+            );
+            if ($sender) {
+                return true;
+            }
+        } catch (\Throwable) {}
+
+        // Global fallback for super-admin sender IDs configured in system settings
+        $globalAuth = (array)config('telegram.authorized_user_ids', []);
+        return in_array((string)$userId, array_map('strval', $globalAuth));
     }
 
     /**

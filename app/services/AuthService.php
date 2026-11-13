@@ -76,12 +76,21 @@ class AuthService
     }
 
     /**
+     * Check if logged in user has 'group_authorizer' role.
+     */
+    public static function isGroupAuthorizer(): bool
+    {
+        $u = self::user();
+        return $u !== null && ($u['role'] ?? '') === 'group_authorizer';
+    }
+
+    /**
      * Check if logged in user has 'user' (normal user) role.
      */
     public static function isUser(): bool
     {
         $u = self::user();
-        return $u !== null && ($u['role'] ?? '') === 'user';
+        return $u !== null && in_array(($u['role'] ?? ''), ['group_authorizer', 'user']);
     }
 
     /**
@@ -95,13 +104,13 @@ class AuthService
 
     /**
      * Check if current user has permission to track conversations & review responses.
-     * Allowed: super_admin, owner, user (normal user).
+     * Allowed: super_admin, owner, group_authorizer, user (normal user).
      * Denied: viewer.
      */
     public static function canTrack(): bool
     {
         $u = self::user();
-        return $u !== null && in_array(($u['role'] ?? ''), ['super_admin', 'owner', 'user']);
+        return $u !== null && in_array(($u['role'] ?? ''), ['super_admin', 'owner', 'group_authorizer', 'user']);
     }
 
     /**
@@ -165,6 +174,11 @@ class AuthService
             return $assignedGroup === $groupId;
         }
 
+        // If user is a group authorizer, they must be assigned to this specific group
+        if (self::isGroupAuthorizer()) {
+            return false;
+        }
+
         $dept = self::userDepartment();
         if ($dept === null) {
             return true;
@@ -194,6 +208,11 @@ class AuthService
                 return false;
             }
             return (int)$tracked['group_id'] === $assignedGroup;
+        }
+
+        // If user is a group authorizer, they cannot access messages outside their assigned group
+        if (self::isGroupAuthorizer()) {
+            return false;
         }
 
         $dept = self::userDepartment();

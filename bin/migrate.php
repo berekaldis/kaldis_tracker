@@ -37,7 +37,7 @@ try {
         echo "[*] Running migration: {$filename}... ";
         $sql = file_get_contents($file);
         try {
-            $pdo->exec($sql);
+            $pdo->exec(Database::prefixQuery($sql));
             echo "DONE\n";
         } catch (\PDOException $e) {
             $msg = $e->getMessage();
@@ -54,8 +54,8 @@ try {
     if ($adminCount === 0) {
         echo "\n[*] No administrator account found. Creating default owner account...\n";
         $defaultUser = 'admin';
-        $defaultEmail = 'admin@kaldiscoffee.com';
-        $defaultPass = 'KaldisAdmin2026!';
+        $defaultEmail = 'admin@kaldisbunna.et';
+        $defaultPass = 'kaldis123';
         $passHash = password_hash($defaultPass, PASSWORD_DEFAULT);
         $now = utc_now();
 

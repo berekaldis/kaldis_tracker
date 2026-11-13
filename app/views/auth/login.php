@@ -96,7 +96,7 @@
 
                 <div class="mb-3">
                     <label for="username" class="form-label">Username or Email</label>
-                    <input type="text" class="form-control" id="username" name="username" required autofocus placeholder="admin or email@kaldiscoffee.com">
+                    <input type="text" class="form-control" id="username" name="username" required autofocus placeholder="admin or user@kaldisbunna.et">
                 </div>
 
                 <div class="mb-3">

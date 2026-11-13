@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `tg_admins` (
   `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `email` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `role` enum('super_admin','owner','user','viewer') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user',
+  `role` enum('super_admin','owner','group_authorizer','user','viewer') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'group_authorizer',
   `department` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `assigned_group_id` int DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
@@ -101,6 +101,26 @@ CREATE TABLE IF NOT EXISTS `tg_group_members` (
   KEY `idx_gm_joined` (`joined_at`),
   KEY `idx_gm_left` (`left_at`),
   KEY `idx_gm_active` (`group_id`,`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+/* --------------------------------------------------------
+   Table structure for `tg_group_authorized_senders`
+-------------------------------------------------------- */
+CREATE TABLE IF NOT EXISTS `tg_group_authorized_senders` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `group_id` int NOT NULL,
+  `telegram_user_id` bigint NOT NULL,
+  `full_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `username` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_gas_group_user` (`group_id`,`telegram_user_id`),
+  KEY `fk_gas_group` (`group_id`),
+  KEY `idx_gas_user` (`telegram_user_id`),
+  CONSTRAINT `fk_tg_gas_group` FOREIGN KEY (`group_id`) REFERENCES `tg_telegram_groups` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* --------------------------------------------------------
@@ -208,12 +228,22 @@ CREATE TABLE IF NOT EXISTS `tg_audit_logs` (
 
 /* --------------------------------------------------------
    Default Administrator Accounts (admin & superadmin)
-   Password for admin:       KaldisAdmin2026!
-   Password for superadmin:  KaldisSuperAdmin2026!
+   Default password for all accounts: kaldis123
+   Email domain: @kaldisbunna.et
 -------------------------------------------------------- */
 INSERT IGNORE INTO `tg_admins` (`id`, `username`, `email`, `password_hash`, `role`, `department`, `is_active`, `created_at`, `updated_at`) VALUES
-(1, 'superadmin', 'superadmin@kaldiscoffee.com', '$2y$10$FERebuoJemShCct.1GaGfOIlajy40IVNreSzwJMc7Q.W3IWCF2ZNu', 'super_admin', NULL, 1, NOW(), NOW()),
-(2, 'admin', 'admin@kaldiscoffee.com', '$2y$10$u.X0wktkcPjwmTE1Sp4YluJaOZQZtLvwIoJDEkqzaVVCUc6EhuJDe', 'super_admin', NULL, 1, NOW(), NOW());
+(1, 'superadmin', 'superadmin@kaldisbunna.et', '$2y$10$/XvOUnL/6EU6Q9pbUZE12.4eXHxLTBYqbcE/j2YxYaT5tIuwUCvR.', 'super_admin', NULL, 1, NOW(), NOW()),
+(2, 'admin', 'admin@kaldisbunna.et', '$2y$10$/XvOUnL/6EU6Q9pbUZE12.4eXHxLTBYqbcE/j2YxYaT5tIuwUCvR.', 'super_admin', NULL, 1, NOW(), NOW());
+
+/* --------------------------------------------------------
+   Default Authorized Senders by Group
+-------------------------------------------------------- */
+INSERT IGNORE INTO `tg_group_authorized_senders` (`group_id`, `telegram_user_id`, `full_name`, `username`, `notes`, `is_active`, `created_at`, `updated_at`) VALUES
+(21, 814523272, 'Bereket', 'bereket_kaldis', 'Supervisor', 1, NOW(), NOW()),
+(21, 1626288394, 'Berhanu Seyoum', 'bere_sender2', 'Team Lead', 1, NOW(), NOW()),
+(21, 6492922880, 'KALDI\'S Coffee', 'kaldis_official', 'Official Channel', 1, NOW(), NOW()),
+(65, 814523272, 'Bereket', 'bereket_kaldis', 'Airport Manager', 1, NOW(), NOW()),
+(65, 6492922880, 'KALDI\'S Coffee', 'kaldis_official', 'Official Channel', 1, NOW(), NOW());
 
 /* --------------------------------------------------------
    Default System Configuration Settings

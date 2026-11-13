@@ -152,6 +152,7 @@ use App\Controllers\TrackedMessageController;
 use App\Controllers\AuditController;
 use App\Controllers\WebhookController;
 use App\Controllers\SettingsController;
+use App\Controllers\AuthorizedSenderController;
 
 match (true) {
     // Auth routes
@@ -174,6 +175,13 @@ match (true) {
     $path === 'groups/toggle-active' && $requestMethod === 'POST' => (new GroupController())->toggleActive(),
     $path === 'groups/health-check' && $requestMethod === 'POST' => (new GroupController())->healthCheck(),
     $path === 'groups/view' && $requestMethod === 'GET' => (new GroupController())->view(),
+
+    // Authorized Senders routes
+    $path === 'senders' && $requestMethod === 'GET' => (new AuthorizedSenderController())->index(),
+    $path === 'senders/create' && $requestMethod === 'POST' => (new AuthorizedSenderController())->create(),
+    $path === 'senders/toggle' && $requestMethod === 'POST' => (new AuthorizedSenderController())->toggle(),
+    $path === 'senders/delete' && $requestMethod === 'POST' => (new AuthorizedSenderController())->delete(),
+    $path === 'api/senders/group-members' && $requestMethod === 'GET' => (new AuthorizedSenderController())->groupMembers(),
 
     // Tracked Messages routes
     $path === 'messages/create' && $requestMethod === 'POST' => (new TrackedMessageController())->create(),

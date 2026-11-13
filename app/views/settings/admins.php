@@ -63,9 +63,9 @@
                                 </span>
                             <?php elseif ($a['role'] === 'owner'): ?>
                                 <span class="badge bg-primary text-uppercase">Owner</span>
-                            <?php elseif ($a['role'] === 'user'): ?>
-                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle text-uppercase" title="Can track group conversations only">
-                                    <i class="bi bi-person-fill me-1"></i> Normal User
+                            <?php elseif ($a['role'] === 'group_authorizer' || $a['role'] === 'user'): ?>
+                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle text-uppercase" title="Can track only assigned group conversations">
+                                    <i class="bi bi-person-badge-fill me-1"></i> Group Authorizer
                                 </span>
                             <?php else: ?>
                                 <span class="badge bg-secondary text-uppercase">Viewer</span>
@@ -126,24 +126,26 @@
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Email Address <span class="text-danger">*</span></label>
-                    <input type="email" name="email" class="form-control" required placeholder="e.g. user@kaldiscoffee.com">
+                    <input type="email" name="email" class="form-control" required placeholder="e.g. user@kaldisbunna.et">
+                    <div class="form-text small">Corporate email on <code>@kaldisbunna.et</code></div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Initial Password <span class="text-danger">*</span></label>
-                    <input type="password" name="password" class="form-control" required placeholder="••••••••" minlength="8">
+                    <input type="text" name="password" class="form-control font-monospace" required value="kaldis123" minlength="6">
+                    <div class="form-text small text-success"><i class="bi bi-info-circle me-1"></i> Default initial password is pre-filled: <code>kaldis123</code></div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Role &amp; Permissions <span class="text-danger">*</span></label>
                     <select name="role" id="createRoleSelect" class="form-select" required onchange="handleRoleChange(this.value, 'createGroupSelectWrapper')">
-                        <option value="user" selected>Normal User (Only tracks assigned group conversation)</option>
+                        <option value="group_authorizer" selected>Group Authorizer (Can track ONLY assigned group)</option>
                         <option value="owner">Owner / Manager (Manages groups, sync, and tracking)</option>
                         <option value="super_admin">Super Admin (Full system access &amp; bot configuration)</option>
                         <option value="viewer">Viewer (Read-only reports &amp; dashboard)</option>
                     </select>
                     <div class="form-text small">
-                        <strong>Normal User:</strong> Has access only to track and manage message responses for their assigned group. Cannot change bot configuration or administer groups.
+                        <strong>Group Authorizer:</strong> Has exclusive permission to track and manage message responses for their assigned group. Cannot access or track conversations in other groups.
                     </div>
                 </div>
 
@@ -206,7 +208,8 @@
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Role &amp; Permissions</label>
                     <select name="role" id="editAdminRoleSelect" class="form-select" required>
-                        <option value="user">Normal User (Only tracks assigned group conversation)</option>
+                        <option value="group_authorizer">Group Authorizer (Can track ONLY assigned group)</option>
+                        <option value="user">Normal User (Group Authorizer)</option>
                         <option value="owner">Owner / Manager (Manages groups, sync, and tracking)</option>
                         <option value="super_admin">Super Admin (Full system access)</option>
                         <option value="viewer">Viewer (Read-only reports)</option>
