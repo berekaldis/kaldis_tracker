@@ -63,17 +63,32 @@ if ($requestMethod === 'HEAD') {
 
 // Calculate base script path if installed in subdirectory (e.g. /tgroup/public or /tgroup)
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
-$scriptDir = dirname($scriptName);
-$normalizedDir = str_replace('\\', '/', $scriptDir);
+$scriptDir = str_replace('\\', '/', dirname($scriptName));
 
-if ($normalizedDir !== '/' && str_starts_with($requestUri, $normalizedDir)) {
-    $path = substr($requestUri, strlen($normalizedDir));
-} else {
-    $path = $requestUri;
+// Check if APP_URL has a subpath (e.g. /tgroup)
+$appUrlPath = '';
+$configuredAppUrl = (string)config('app.url', '');
+if (!empty($configuredAppUrl)) {
+    $parsedPath = parse_url($configuredAppUrl, PHP_URL_PATH);
+    if (!empty($parsedPath) && $parsedPath !== '/') {
+        $appUrlPath = rtrim($parsedPath, '/');
+    }
+}
+
+// Strip leading subdirectory from request URI
+$path = $requestUri;
+if (!empty($appUrlPath) && str_starts_with($path, $appUrlPath)) {
+    $path = substr($path, strlen($appUrlPath));
+} elseif ($scriptDir !== '/' && $scriptDir !== '.' && str_starts_with($path, $scriptDir)) {
+    $path = substr($path, strlen($scriptDir));
+} elseif (str_starts_with($path, '/tgroup')) {
+    $path = substr($path, strlen('/tgroup'));
 }
 
 $path = trim($path, '/');
-// Strip index.php prefix if present (e.g. /index.php/login or /index.php)
+// Strip public or index.php prefix if present (e.g. public/login or index.php/login)
+$path = preg_replace('#^public/?#', '', $path);
+$path = trim($path, '/');
 $path = preg_replace('#^index\.php/?#', '', $path);
 $path = trim($path, '/');
 

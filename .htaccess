@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct web access to sensitive core directories and files
+    RewriteRule ^(\.git|\.env|app|database|storage|tests|bin) - [F,L,NC]
+
+    # Forward all web requests to public/ subfolder
+    RewriteCond %{REQUEST_URI} !^/tgroup/public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L,QSA]
+</IfModule>
+
+# Block hidden files
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
