@@ -60,7 +60,7 @@ class TelegramService
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlErr = curl_error($ch);
         }
-        curl_close($ch);
+        unset($ch); // PHP 8.0+ automatically closes cURL handle upon destruction (curl_close is deprecated in PHP 8.5)
 
         if ($response === false) {
             return [

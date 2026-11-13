@@ -54,7 +54,7 @@ if (!$debug && isset($_GET['debug']) && $_GET['debug'] === 'kaldis2026') {
 if ($debug) {
     ini_set('display_errors', '1');
     ini_set('display_startup_errors', '1');
-    error_reporting(E_ALL);
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
 } else {
     ini_set('display_errors', '0');
     error_reporting(0);
