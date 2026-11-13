@@ -184,6 +184,7 @@ match (true) {
     $path === 'api/senders/group-members' && $requestMethod === 'GET' => (new AuthorizedSenderController())->groupMembers(),
 
     // Tracked Messages routes
+    ($path === 'messages' || $path === 'tracked-messages') && $requestMethod === 'GET' => (new TrackedMessageController())->index(),
     $path === 'messages/create' && $requestMethod === 'POST' => (new TrackedMessageController())->create(),
     $path === 'messages/view' && $requestMethod === 'GET' => (new TrackedMessageController())->view(),
     $path === 'messages/confirm-response' && $requestMethod === 'POST' => (new TrackedMessageController())->confirmResponse(),

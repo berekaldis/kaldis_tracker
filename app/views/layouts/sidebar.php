@@ -72,15 +72,15 @@ $roleBadgeClass = match($user['role'] ?? '') {
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'groups') ? 'active' : '' ?>" href="<?= url('groups') ?>">
-                    <i class="bi bi-people-fill"></i>
-                    <span>Telegram Groups</span>
+                <a class="nav-link <?= (str_contains($currentUri, 'messages') || str_contains($currentUri, 'tracked-messages')) && !str_contains($currentUri, 'messages/create') ? 'active' : '' ?>" href="<?= url('messages') ?>">
+                    <i class="bi bi-chat-quote-fill"></i>
+                    <span>Tracked Group Messages</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'senders') ? 'active' : '' ?>" href="<?= url('senders') ?>">
-                    <i class="bi bi-person-check-fill"></i>
-                    <span>Authorized Senders</span>
+                <a class="nav-link <?= str_contains($currentUri, 'groups') ? 'active' : '' ?>" href="<?= url('groups') ?>">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Telegram Groups</span>
                 </a>
             </li>
 

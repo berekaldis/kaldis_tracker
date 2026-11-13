@@ -11,6 +11,14 @@ use DateTimeZone;
 class TrackedMessageController
 {
     /**
+     * Display list of tracked group messages (routes from /messages).
+     */
+    public function index(): void
+    {
+        (new DashboardController())->index();
+    }
+
+    /**
      * Display tracked message response details.
      */
     public function view(): void
