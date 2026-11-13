@@ -6,6 +6,9 @@
 
 declare(strict_types=1);
 
+// Prevent PHP 8.5+ deprecation notices from leaking into UI
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+
 // 1. Security Headers
 header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: SAMEORIGIN");
