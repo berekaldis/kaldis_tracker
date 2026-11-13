@@ -4,20 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title><?= e(config('app.name', 'Kaldis Coffee Telegram Tracker')) ?></title>
-    <link rel="icon" type="image/jpeg" href="<?= url('assets/img/kaldis-logo.jpg') ?>">
-    <link rel="apple-touch-icon" href="<?= url('assets/img/kaldis-logo.jpg') ?>">
+    <title><?= e($pageTitle ?? 'Monitoring System') ?> &bull; <?= e(config('app.name', "Kaldi's Coffee")) ?></title>
+    
+    <link rel="icon" type="image/svg+xml" href="<?= url('favicon.svg') ?>">
+    <link rel="alternate icon" type="image/jpeg" href="<?= url('assets/img/kaldis-logo.jpg') ?>">
+    <link rel="apple-touch-icon" href="<?= url('assets/img/logo.png') ?>">
+    
+    <!-- Google / Bunny Fonts: Instrument Sans (matching companysystem) -->
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <!-- App Custom CSS -->
+    <!-- App Custom CSS (companysystem Theme) -->
     <link rel="stylesheet" href="<?= url('assets/css/app.css') ?>">
 </head>
 <body>
     <div class="app-layout">
-        <!-- Sidebar Navigation -->
+        <!-- Sidebar Navigation (companysystem AppSidebar) -->
         <?php require __DIR__ . '/sidebar.php'; ?>
 
         <!-- Backdrop for mobile drawer -->
@@ -25,20 +31,33 @@
 
         <!-- Main Content Area -->
         <div class="app-content-wrapper">
-            <!-- Topbar -->
+            <!-- Topbar (companysystem AppSidebarHeader) -->
             <header class="app-topbar">
-                <button class="btn btn-outline-secondary btn-sm d-lg-none me-2" id="sidebarToggleBtn" aria-label="Toggle Sidebar">
-                    <i class="bi bi-list fs-5"></i>
-                </button>
-                <div class="topbar-title">
-                    <span class="text-muted small">Kaldis Coffee Tracker &bull; </span>
-                    <span class="fw-semibold text-dark"><?= e($pageTitle ?? 'Monitoring System') ?></span>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-secondary btn-sm d-lg-none" id="sidebarToggleBtn" aria-label="Toggle Sidebar">
+                        <i class="bi bi-list fs-5"></i>
+                    </button>
+                    <!-- Clean Breadcrumbs -->
+                    <div class="topbar-breadcrumbs d-flex align-items-center">
+                        <span class="breadcrumb-item-lead">Kaldi's Coffee</span>
+                        <i class="bi bi-chevron-right breadcrumb-separator mx-1.5"></i>
+                        <span class="breadcrumb-item-active"><?= e($pageTitle ?? 'Monitoring System') ?></span>
+                    </div>
                 </div>
+
                 <div class="topbar-actions ms-auto d-flex align-items-center gap-2">
-                    <span class="badge bg-light text-secondary border font-monospace d-none d-sm-inline">
-                        <i class="bi bi-clock me-1"></i><?= format_tz(utc_now(), 'h:i A') ?> (EAT)
+                    <!-- Live Status Indicator -->
+                    <div class="live-status-pill d-none d-sm-inline-flex" title="Real-time WebSocket &amp; polling listener active">
+                        <span class="pulse-dot"></span>
+                        <span>Live Sync</span>
+                    </div>
+
+                    <!-- EAT Clock Pill -->
+                    <span class="badge bg-light text-secondary border font-monospace d-none d-md-inline-flex py-1 px-2.5">
+                        <i class="bi bi-clock me-1 text-muted"></i><?= format_tz(utc_now(), 'h:i A') ?> EAT
                     </span>
-                    <a href="<?= url('dashboard') ?>" class="btn btn-sm btn-outline-secondary d-none d-md-inline" title="Quick Dashboard">
+
+                    <a href="<?= url('dashboard') ?>" class="btn btn-sm btn-outline-secondary" title="Return to Dashboard">
                         <i class="bi bi-speedometer2"></i>
                     </a>
                 </div>
@@ -50,7 +69,7 @@
                 <?= $content ?? '' ?>
             </main>
 
-            <!-- Footer -->
+            <!-- Footer (companysystem AppFooter) -->
             <?php require __DIR__ . '/footer.php'; ?>
         </div>
     </div>

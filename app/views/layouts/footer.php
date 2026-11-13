@@ -1,10 +1,10 @@
-<footer class="footer-kaldis">
-    <div class="container text-center">
-        <div class="small mb-1">
-            <strong>Kaldis Coffee Telegram Reply Tracker (v2)</strong> &bull; All timestamps stored in UTC and rendered in <code><?= e(config('app.timezone', 'Africa/Addis_Ababa')) ?></code>
+<footer class="app-footer">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+        <div>
+            <strong>Kaldi's Coffee Ethiopia</strong> &bull; Telegram Conversation Tracker (v2.0)
         </div>
-        <div class="text-white-50" style="font-size: 0.75rem;">
-            Notice: Messages in registered groups are captured and retained for <?= (int)config('app.retention_days', 180) ?> days for operational response verification. Group members must be notified of monitoring.
+        <div class="text-muted font-monospace small">
+            Timezone: <?= e(config('app.timezone', 'Africa/Addis_Ababa')) ?> (EAT) &bull; Retention: <?= (int)config('app.retention_days', 180) ?> days
         </div>
     </div>
 </footer>

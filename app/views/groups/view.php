@@ -3,20 +3,22 @@ use App\Services\AuthService;
 $isOwner = AuthService::isOwner();
 ?>
 <div class="row align-items-center mb-4">
-    <div class="col-md-6">
+    <div class="col-md-5">
         <div class="d-flex align-items-center">
-            <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm me-3">
+            <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm me-3 shadow-sm">
                 <i class="bi bi-arrow-left"></i> Groups
             </a>
             <div>
                 <h3 class="fw-bold mb-0" style="color: var(--kaldis-primary);"><?= e($group['title']) ?></h3>
-                <span class="font-monospace small text-muted">Chat ID: <?= e($group['telegram_chat_id']) ?></span>
-                <?php if (!empty($group['username'])): ?>
-                    <span class="badge bg-light text-secondary border ms-1">@<?= e($group['username']) ?></span>
-                <?php endif; ?>
-                <span class="badge bg-amber-subtle text-dark border border-warning ms-1">
-                    <i class="bi bi-building me-1"></i><?= e($group['department'] ?? 'General') ?>
-                </span>
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="font-monospace small text-muted">ID: <?= e($group['telegram_chat_id']) ?></span>
+                    <?php if (!empty($group['username'])): ?>
+                        <span class="badge bg-light text-secondary border">@<?= e($group['username']) ?></span>
+                    <?php endif; ?>
+                    <span class="badge bg-amber-subtle rounded-pill">
+                        <i class="bi bi-building me-1"></i><?= e($group['department'] ?? 'General') ?>
+                    </span>
+                </div>
             </div>
         </div>
     </div>
@@ -27,7 +29,7 @@ $isOwner = AuthService::isOwner();
                 <?= csrf_field() ?>
                 <input type="hidden" name="group_id" value="<?= $group['id'] ?>">
                 <button type="submit" class="btn btn-success btn-sm shadow-sm" title="Send interactive 'Tap to Check In' button directly into the Telegram group">
-                    <i class="bi bi-broadcast-pin me-1"></i> Send Check-in Button to Telegram
+                    <i class="bi bi-broadcast-pin me-1"></i> Send Check-in Button
                 </button>
             </form>
 
@@ -42,64 +44,78 @@ $isOwner = AuthService::isOwner();
             </form>
 
             <!-- Bulk Import Button -->
-            <button type="button" class="btn btn-outline-dark btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalBulkImport">
+            <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalBulkImport">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i> Bulk Import
             </button>
 
             <!-- Add Single Member Button -->
             <button type="button" class="btn btn-kaldis btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAddMember">
-                <i class="bi bi-person-plus-fill me-1"></i> Add Single Member
+                <i class="bi bi-person-plus-fill me-1"></i> Add Member
             </button>
         <?php endif; ?>
 
-        <span class="badge bg-<?= $group['is_active'] ? 'success' : 'secondary' ?> fs-6">
+        <span class="badge rounded-pill bg-<?= $group['is_active'] ? 'success-subtle text-success border border-success-subtle' : 'secondary-subtle text-secondary' ?> px-3 py-1.5 fw-semibold">
             <?= $group['is_active'] ? 'Active' : 'Paused' ?>
         </span>
     </div>
 </div>
 
-<!-- Group Info Cards -->
+<!-- Group Info Cards (companysystem Stat Cards) -->
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-lg-3">
-        <div class="card border-0 shadow-sm p-3 h-100">
-            <div class="small text-muted text-uppercase fw-semibold">Tracked in System Roster</div>
-            <div class="fs-3 fw-bold text-dark"><?= count($members) ?></div>
-            <div class="small text-muted">Members recorded in database</div>
+        <div class="card card-summary border-0 shadow-sm h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-label">System Roster</div>
+                <div class="stat-icon total"><i class="bi bi-people"></i></div>
+            </div>
+            <div class="stat-value"><?= count($members) ?></div>
+            <div class="small text-muted mt-1">Recorded in database</div>
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card border-0 shadow-sm p-3 h-100">
-            <div class="small text-muted text-uppercase fw-semibold">Total Members on Telegram</div>
-            <div class="fs-3 fw-bold text-primary">
+        <div class="card card-summary border-0 shadow-sm h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-label">Telegram Total</div>
+                <div class="stat-icon" style="background-color: var(--primary-subtle); color: var(--primary); border: 1px solid var(--primary-light);"><i class="bi bi-telegram"></i></div>
+            </div>
+            <div class="stat-value text-primary">
                 <?= $telegramTotalMembers !== null ? number_format($telegramTotalMembers) : '—' ?>
             </div>
-            <div class="small text-muted">Live Telegram group count</div>
+            <div class="small text-muted mt-1">Live Telegram group count</div>
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card border-0 shadow-sm p-3 h-100">
-            <div class="small text-muted text-uppercase fw-semibold">Bot Privileges</div>
-            <div class="fs-4 fw-bold <?= $group['bot_is_admin'] ? 'text-success' : 'text-secondary' ?> mt-1">
-                <?= $group['bot_is_admin'] ? 'Administrator' : 'Standard Member' ?>
+        <div class="card card-summary border-0 shadow-sm h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-label">Bot Privileges</div>
+                <div class="stat-icon <?= $group['bot_is_admin'] ? 'replied' : 'total' ?>">
+                    <i class="bi bi-shield-<?= $group['bot_is_admin'] ? 'check' : 'minus' ?>"></i>
+                </div>
             </div>
-            <div class="small text-muted">
-                <?= $group['bot_is_admin'] ? 'Can detect member join/leave' : 'Promote bot to admin for full updates' ?>
+            <div class="stat-value fs-4 <?= $group['bot_is_admin'] ? 'text-success' : 'text-secondary' ?>">
+                <?= $group['bot_is_admin'] ? 'Administrator' : 'Standard' ?>
+            </div>
+            <div class="small text-muted mt-1">
+                <?= $group['bot_is_admin'] ? 'Can detect member events' : 'Promote bot for full events' ?>
             </div>
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card border-0 shadow-sm p-3 h-100">
-            <div class="small text-muted text-uppercase fw-semibold">Department Assignment</div>
-            <div class="fs-4 fw-bold text-dark mt-1">
+        <div class="card card-summary border-0 shadow-sm h-100 p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="stat-label">Department</div>
+                <div class="stat-icon" style="background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;"><i class="bi bi-building"></i></div>
+            </div>
+            <div class="stat-value fs-4 text-dark">
                 <?= e($group['department'] ?? 'General') ?>
             </div>
-            <div class="small text-muted">Isolated access control scope</div>
+            <div class="small text-muted mt-1">Access control scope</div>
         </div>
     </div>
 </div>
 
 <!-- Explanatory Notice: How Telegram Member Discovery Works -->
-<div class="alert alert-warning-subtle border border-warning shadow-sm mb-4">
+<div class="alert alert-warning-subtle shadow-sm mb-4">
     <div class="d-flex align-items-start">
         <div class="fs-2 text-warning me-3 mt-1"><i class="bi bi-shield-exclamation"></i></div>
         <div class="flex-grow-1">

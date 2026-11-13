@@ -12,100 +12,104 @@ $roleLabel = match($user['role'] ?? '') {
     default => ucfirst($user['role'] ?? 'User')
 };
 $roleBadgeClass = match($user['role'] ?? '') {
-    'super_admin' => 'bg-warning text-dark border border-warning',
-    'owner' => 'bg-primary text-white',
-    'user' => 'bg-info-subtle text-info-emphasis border border-info-subtle',
-    default => 'bg-secondary text-white'
+    'super_admin' => 'badge-status-pending_review text-uppercase',
+    'owner' => 'bg-slate-900 text-white text-uppercase',
+    'user' => 'badge-status-replied text-uppercase',
+    default => 'badge-status-unknown text-uppercase'
 };
 ?>
 <aside class="app-sidebar" id="appSidebar">
-    <!-- Brand Header -->
+    <!-- Brand Header (companysystem AppLogo) -->
     <div class="sidebar-brand">
-        <a href="<?= url('dashboard') ?>" class="d-flex align-items-center text-decoration-none">
-            <img src="<?= url('assets/img/kaldis-logo.jpg') ?>" alt="Kaldis Logo" class="brand-logo-img me-2">
+        <a href="<?= url('dashboard') ?>" class="brand-logo-container">
+            <img src="<?= url('assets/img/logo.png') ?>" alt="Kaldi's Coffee Logo" class="brand-logo-img" onerror="this.onerror=null; this.src='<?= url('assets/img/kaldis-logo.jpg') ?>';">
             <div class="brand-text">
-                <span class="brand-title">Kaldis <span class="accent">Tracker</span></span>
-                <span class="badge bg-amber-subtle text-amber border border-amber-subtle ms-1" style="font-size: 0.65rem;">v2.0</span>
+                <span class="brand-title">
+                    Kaldi's <span class="accent">Coffee</span>
+                </span>
+                <span class="brand-badge">Tracker</span>
             </div>
         </a>
-        <button type="button" class="btn-close btn-close-white d-lg-none" id="sidebarCloseBtn" aria-label="Close"></button>
+        <button type="button" class="btn-close d-lg-none" id="sidebarCloseBtn" aria-label="Close"></button>
     </div>
 
-    <!-- Logged in Admin User Card -->
+    <!-- User Profile Header (companysystem UserInfo) -->
     <div class="sidebar-user-box">
         <div class="user-avatar">
             <?= strtoupper(substr($user['username'] ?? 'A', 0, 2)) ?>
         </div>
-        <div class="user-meta overflow-hidden">
+        <div class="overflow-hidden flex-1">
             <div class="user-name text-truncate" title="<?= e($user['username'] ?? '') ?>">
                 <?= e($user['username'] ?? 'Admin') ?>
             </div>
-            <span class="badge <?= $roleBadgeClass ?> text-uppercase" style="font-size: 0.62rem; letter-spacing: 0.5px;">
-                <?php if ($isSuperAdmin): ?><i class="bi bi-shield-lock-fill me-1"></i><?php endif; ?>
-                <?= $roleLabel ?>
-            </span>
-            <?php if (!empty($user['assigned_group_id'])): ?>
-                <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 0.62rem;" title="Assigned Telegram Group">
-                    <i class="bi bi-chat-quote-fill me-1"></i>Group #<?= (int)$user['assigned_group_id'] ?>
+            <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                <span class="badge <?= $roleBadgeClass ?>" style="font-size: 0.62rem; letter-spacing: 0.04em;">
+                    <?php if ($isSuperAdmin): ?><i class="bi bi-shield-lock-fill me-0.5"></i><?php endif; ?>
+                    <?= $roleLabel ?>
                 </span>
-            <?php elseif (!empty($user['department']) && strcasecmp($user['department'], 'all') !== 0): ?>
-                <span class="badge bg-info-subtle text-info border border-info-subtle ms-1" style="font-size: 0.62rem;" title="Department Restricted Access">
-                    <i class="bi bi-building me-1"></i><?= e($user['department']) ?>
-                </span>
-            <?php endif; ?>
+                <?php if (!empty($user['assigned_group_id'])): ?>
+                    <span class="badge bg-light text-success border" style="font-size: 0.62rem;" title="Assigned Group">
+                        <i class="bi bi-chat-quote me-0.5"></i>#<?= (int)$user['assigned_group_id'] ?>
+                    </span>
+                <?php elseif (!empty($user['department']) && strcasecmp($user['department'], 'all') !== 0): ?>
+                    <span class="badge bg-light text-primary border" style="font-size: 0.62rem;" title="Department Scope">
+                        <i class="bi bi-building me-0.5"></i><?= e($user['department']) ?>
+                    </span>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
     <!-- Navigation Menu Items -->
-    <nav class="sidebar-nav">
-        <div class="nav-section-label">MONITORING</div>
+    <nav class="sidebar-nav custom-scrollbar">
+        <div class="nav-section-label">Monitoring</div>
         <ul class="nav flex-column mb-2">
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'dashboard') && !str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard') ?>">
-                    <i class="bi bi-speedometer2 me-2"></i>
+                    <i class="bi bi-speedometer2"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'groups') ? 'active' : '' ?>" href="<?= url('groups') ?>">
-                    <i class="bi bi-people-fill me-2"></i>
+                    <i class="bi bi-people-fill"></i>
                     <span>Telegram Groups</span>
                 </a>
             </li>
         </ul>
 
         <?php if ($isSuperAdmin): ?>
-            <div class="nav-section-label">ADMINISTRATION</div>
+            <div class="nav-section-label">Administration</div>
             <ul class="nav flex-column mb-2">
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'settings/bot') ? 'active' : '' ?>" href="<?= url('settings/bot') ?>">
-                        <i class="bi bi-robot me-2"></i>
+                        <i class="bi bi-robot"></i>
                         <span>Bot Configuration</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'settings/admins') ? 'active' : '' ?>" href="<?= url('settings/admins') ?>">
-                        <i class="bi bi-person-gear me-2"></i>
-                        <span>Admin Users</span>
+                        <i class="bi bi-person-gear"></i>
+                        <span>User Management</span>
                     </a>
                 </li>
             </ul>
         <?php endif; ?>
 
-        <div class="nav-section-label">SYSTEM &amp; DOCS</div>
+        <div class="nav-section-label">System &amp; Info</div>
         <ul class="nav flex-column mb-3">
             <?php if ($isOwner): ?>
                 <li class="nav-item">
                     <a class="nav-link <?= str_contains($currentUri, 'audit') ? 'active' : '' ?>" href="<?= url('audit') ?>">
-                        <i class="bi bi-shield-check me-2"></i>
+                        <i class="bi bi-shield-check"></i>
                         <span>Audit Logs</span>
                     </a>
                 </li>
             <?php endif; ?>
             <li class="nav-item">
                 <a class="nav-link <?= str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard/about') ?>">
-                    <i class="bi bi-info-circle-fill me-2"></i>
-                    <span>About Monitoring</span>
+                    <i class="bi bi-info-circle-fill"></i>
+                    <span>About Tracker</span>
                 </a>
             </li>
         </ul>
@@ -116,7 +120,8 @@ $roleBadgeClass = match($user['role'] ?? '') {
         <form action="<?= url('logout') ?>" method="POST" class="w-100">
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center">
-                <i class="bi bi-box-arrow-right me-2"></i> Sign Out
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Sign Out</span>
             </button>
         </form>
     </div>

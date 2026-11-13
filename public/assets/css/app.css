@@ -1,39 +1,139 @@
-/* Kaldis Coffee Telegram Reply Tracker - Custom Sidebar & Dashboard Styling */
+/* ==========================================================================
+   Kaldis Coffee Telegram Reply Tracker
+   Company System (companysystem) Design Language & UI/UX System
+   ========================================================================== */
+
+@import url('https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700');
+
 :root {
-    --sidebar-width: 260px;
-    --sidebar-bg: #2b1810;
-    --sidebar-header: #1e100a;
-    --sidebar-item-active: rgba(200, 150, 62, 0.18);
-    --kaldis-primary: #4a2c1d;
-    --kaldis-primary-dark: #2b1810;
-    --kaldis-accent: #c8963e;
-    --kaldis-accent-light: #e0b468;
-    --kaldis-bg: #f8f6f3;
-    --kaldis-card-border: #ebdcd0;
-    --text-muted: #756a63;
+    /* Brand & Typography */
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    
+    /* Layout Dimensions */
+    --sidebar-width: 270px;
+    --topbar-height: 64px;
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --radius-lg: 1rem;
+    
+    /* Company System Theme Colors (Light & Balanced) */
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --input: #e2e8f0;
+    
+    /* Kaldis Brand Core: Amber / Gold Coffee Palette */
+    --primary: #b45309;             /* Kaldis Amber 700 */
+    --primary-hover: #92400e;       /* Amber 800 */
+    --primary-dark: #78350f;        /* Amber 900 */
+    --primary-light: #fef3c7;       /* Amber 100 */
+    --primary-subtle: #fffbeb;      /* Amber 50 */
+    --primary-foreground: #ffffff;
+    
+    /* Secondary & Dark Accent (Obsidian / Slate) */
+    --dark-accent: #0f172a;
+    --dark-accent-hover: #1e293b;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    --muted: #f8fafc;
+    --muted-foreground: #64748b;
+    
+    /* Status Colors */
+    --success: #059669;
+    --success-bg: #ecfdf5;
+    --success-border: #a7f3d0;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --danger: #e11d48;
+    --danger-bg: #fff1f2;
+    --danger-border: #fecdd3;
+    --info: #0284c7;
+    --info-bg: #f0f9ff;
+    --info-border: #bae6fd;
+    
+    /* Sidebar Specific Tokens */
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e2e8f0;
+    --sidebar-header: #ffffff;
+    --sidebar-text: #475569;
+    --sidebar-text-hover: #0f172a;
+    --sidebar-item-hover: #f1f5f9;
+    --sidebar-item-active-bg: #fffbeb;
+    --sidebar-item-active-text: #92400e;
+    --sidebar-item-active-border: #b45309;
+
+    /* Backward Compatibility Alias */
+    --kaldis-primary: var(--primary);
+    --kaldis-primary-dark: var(--primary-dark);
+    --kaldis-accent: var(--primary);
+    --kaldis-accent-light: var(--primary-light);
+    --kaldis-bg: var(--background);
+    --kaldis-card-border: var(--border);
+    --text-muted: var(--muted-foreground);
+}
+
+/* Base Document Styling */
+*, *::before, *::after {
+    box-sizing: border-box;
 }
 
 body {
-    background-color: var(--kaldis-bg);
-    color: #2b2b2b;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 0.925rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
     margin: 0;
     overflow-x: hidden;
 }
 
-/* App Layout Structure */
+/* Custom Sleek Scrollbar matching companysystem */
+html, body, .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(180, 83, 9, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: rgba(180, 83, 9, 0.25);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(180, 83, 9, 0.5);
+}
+
+/* App Layout Shell */
 .app-layout {
     display: flex;
     min-height: 100vh;
     width: 100%;
+    background-color: var(--background);
 }
 
-/* Sidebar Styles */
+/* ==========================================================================
+   Sidebar Component (companysystem AppSidebar Style)
+   ========================================================================== */
+
 .app-sidebar {
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
-    color: #ffffff;
+    border-right: 1px solid var(--sidebar-border);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -41,401 +141,721 @@ body {
     bottom: 0;
     left: 0;
     z-index: 1045;
-    transition: transform 0.25s ease-in-out;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 1px 0 3px rgba(0, 0, 0, 0.02);
 }
 
+/* Brand Header */
 .sidebar-brand {
-    height: 65px;
+    height: var(--topbar-height);
     background-color: var(--sidebar-header);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 1.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
-.sidebar-brand .brand-icon {
-    font-size: 1.6rem;
+.sidebar-brand .brand-logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
 }
 
 .sidebar-brand .brand-logo-img {
-    width: 38px;
-    height: 38px;
-    object-fit: cover;
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
     border-radius: 50%;
-    border: 2px solid var(--kaldis-accent);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-
-/* Authorized Sender Badges & Chips */
-.authorized-chip {
-    background-color: #ffffff !important;
-    border: 1px solid var(--kaldis-card-border) !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.authorized-chip:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+    background: #ffffff;
+    padding: 2px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-brand .brand-title {
     font-weight: 700;
-    font-size: 1.15rem;
-    color: #ffffff;
-    letter-spacing: 0.5px;
+    font-size: 1.05rem;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .sidebar-brand .brand-title .accent {
-    color: var(--kaldis-accent);
+    color: var(--primary);
+    font-weight: 600;
 }
 
-/* Sidebar User Info */
+.sidebar-brand .brand-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.375rem;
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
+    font-weight: 600;
+    border: 1px solid #fde68a;
+}
+
+/* Sidebar User Info (companysystem UserInfo style) */
 .sidebar-user-box {
-    padding: 1rem 1.25rem;
+    padding: 0.875rem 1.25rem;
     display: flex;
     align-items: center;
-    background: rgba(0, 0, 0, 0.15);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 0.75rem;
+    background-color: #fafbfc;
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
-.user-avatar {
+.sidebar-user-box .user-avatar {
     width: 38px;
     height: 38px;
-    border-radius: 8px;
-    background: var(--kaldis-accent);
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: #ffffff;
-    font-weight: 700;
+    font-weight: 600;
+    font-size: 0.85rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 0.75rem;
+    box-shadow: 0 2px 4px rgba(180, 83, 9, 0.2);
     flex-shrink: 0;
-    font-size: 0.95rem;
 }
 
-.user-meta .user-name {
+.sidebar-user-box .user-name {
     font-weight: 600;
-    font-size: 0.9rem;
-    color: #f1ede8;
+    font-size: 0.875rem;
+    color: #0f172a;
     line-height: 1.2;
 }
 
 /* Sidebar Navigation Items */
 .sidebar-nav {
-    flex: 1 1 auto;
+    flex: 1;
     overflow-y: auto;
-    padding: 1rem 0.75rem;
+    padding: 0.875rem 0.75rem;
 }
 
 .nav-section-label {
     font-size: 0.68rem;
     font-weight: 700;
+    color: #94a3b8;
     text-transform: uppercase;
-    letter-spacing: 0.75px;
-    color: rgba(255, 255, 255, 0.4);
-    padding: 0.5rem 0.75rem 0.25rem;
+    letter-spacing: 0.08em;
+    padding: 0.65rem 0.75rem 0.35rem;
 }
 
 .sidebar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.75);
-    font-weight: 500;
-    font-size: 0.9rem;
-    padding: 0.65rem 0.85rem;
-    border-radius: 8px;
     display: flex;
     align-items: center;
+    padding: 0.55rem 0.75rem;
+    color: var(--sidebar-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
     transition: all 0.15s ease-in-out;
-    margin-bottom: 2px;
+    margin-bottom: 0.2rem;
 }
 
 .sidebar-nav .nav-link i {
-    font-size: 1.15rem;
-    width: 24px;
+    font-size: 1.05rem;
+    color: #64748b;
+    margin-right: 0.65rem;
+    transition: color 0.15s ease;
 }
 
 .sidebar-nav .nav-link:hover {
-    color: #ffffff;
-    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--sidebar-text-hover);
+    background-color: var(--sidebar-item-hover);
+}
+
+.sidebar-nav .nav-link:hover i {
+    color: var(--primary);
 }
 
 .sidebar-nav .nav-link.active {
-    color: #ffffff;
-    background-color: var(--sidebar-item-active);
-    border-left: 3px solid var(--kaldis-accent);
+    background-color: var(--sidebar-item-active-bg);
+    color: var(--sidebar-item-active-text);
     font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--sidebar-item-active-border);
 }
 
 .sidebar-nav .nav-link.active i {
-    color: var(--kaldis-accent);
+    color: var(--primary);
 }
 
 /* Sidebar Footer */
 .sidebar-footer {
-    padding: 1rem 1.25rem;
-    background-color: var(--sidebar-header);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.875rem 1rem;
+    border-top: 1px solid var(--sidebar-border);
+    background-color: #fafbfc;
 }
 
-/* Main Content Area */
+/* ==========================================================================
+   Main Content Area & Topbar (companysystem AppSidebarHeader)
+   ========================================================================== */
+
 .app-content-wrapper {
-    flex: 1 1 auto;
+    flex: 1;
     margin-left: var(--sidebar-width);
     display: flex;
     flex-direction: column;
     min-height: 100vh;
     min-width: 0;
+    transition: margin-left 0.25s ease-in-out;
 }
 
-/* Topbar */
 .app-topbar {
-    height: 65px;
+    height: var(--topbar-height);
     background-color: #ffffff;
-    border-bottom: 1px solid var(--kaldis-card-border);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 0 1.5rem;
     position: sticky;
     top: 0;
-    z-index: 1030;
+    z-index: 1020;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+/* Clean Breadcrumbs */
+.topbar-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.topbar-breadcrumbs .breadcrumb-item-lead {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.topbar-breadcrumbs .breadcrumb-separator {
+    color: #cbd5e1;
+    font-size: 0.75rem;
+}
+
+.topbar-breadcrumbs .breadcrumb-item-active {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+/* Live updates dot & status pills */
+.live-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success-border);
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--success);
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5);
+    animation: livePulse 2s infinite;
+}
+
+@keyframes livePulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(5, 150, 105, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(5, 150, 105, 0);
+    }
 }
 
 .content-body {
-    flex: 1 0 auto;
-    padding: 1.75rem 1.5rem;
+    flex: 1;
+    padding: 1.75rem 2rem;
 }
 
-/* Footer */
-.footer-kaldis {
-    background: #ffffff;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    padding: 1.25rem 1.5rem;
-    border-top: 1px solid var(--kaldis-card-border);
-    margin-top: auto;
+/* ==========================================================================
+   Card Component System (companysystem Card, CardHeader, CardTitle)
+   ========================================================================== */
+
+.card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    overflow: hidden;
 }
 
-/* Cards & Statistics */
+.card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 1.15rem 1.5rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.card-footer {
+    background-color: #fafbfc;
+    border-top: 1px solid var(--border-subtle);
+    padding: 0.95rem 1.5rem;
+}
+
+/* Stat Summary Cards */
 .card-summary {
-    border-radius: 10px;
-    border: 1px solid var(--kaldis-card-border);
-    transition: transform 0.2s, box-shadow 0.2s;
-    background: #ffffff;
+    background-color: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .card-summary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(74, 44, 29, 0.08);
+    box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.06);
 }
 
-.card-summary .stat-icon {
+.stat-icon {
     width: 48px;
     height: 48px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 10px;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+    flex-shrink: 0;
 }
 
 .stat-icon.total {
-    background: rgba(74, 44, 29, 0.1);
-    color: var(--kaldis-primary);
+    background-color: #f1f5f9;
+    color: #334155;
+    border: 1px solid #e2e8f0;
 }
 
 .stat-icon.replied {
-    background: rgba(25, 135, 84, 0.1);
-    color: #198754;
+    background-color: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success-border);
 }
 
 .stat-icon.unreplied {
-    background: rgba(220, 53, 69, 0.1);
-    color: #dc3545;
+    background-color: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
 }
 
 .stat-icon.pending {
-    background: rgba(255, 193, 7, 0.15);
-    color: #b58100;
+    background-color: var(--warning-bg);
+    color: var(--warning);
+    border: 1px solid var(--warning-border);
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.2rem;
 }
 
 .stat-value {
     font-size: 1.85rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.1;
+    color: #0f172a;
+    letter-spacing: -0.02em;
 }
 
-.stat-label {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #6c757d;
+/* ==========================================================================
+   Buttons (companysystem Button System)
+   ========================================================================== */
+
+.btn {
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-sm {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.375rem;
+}
+
+.btn-lg {
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+}
+
+/* Primary Kaldis Amber Button */
+.btn-kaldis, .btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 1px 2px 0 rgba(180, 83, 9, 0.25);
+}
+
+.btn-kaldis:hover, .btn-primary:hover,
+.btn-kaldis:focus, .btn-primary:focus {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    color: #ffffff;
+    box-shadow: 0 4px 10px rgba(180, 83, 9, 0.25);
+    transform: translateY(-1px);
+}
+
+.btn-outline-kaldis {
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    background-color: transparent;
+}
+
+.btn-outline-kaldis:hover {
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
+    border-color: var(--primary);
+}
+
+.btn-outline-secondary {
+    border-color: #cbd5e1;
+    color: #334155;
+    background-color: #ffffff;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+/* ==========================================================================
+   Tables (companysystem Table System)
+   ========================================================================== */
+
+.table-responsive {
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.table {
+    margin-bottom: 0;
+    --bs-table-bg: transparent;
+}
+
+.table thead th {
+    background-color: #f8fafc;
+    color: #475569;
     font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    border-top: none;
+    padding: 0.85rem 1rem;
+    white-space: nowrap;
 }
 
-/* Badges */
+.table tbody td {
+    padding: 0.95rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    font-size: 0.875rem;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8fafc !important;
+}
+
+/* ==========================================================================
+   Badges (companysystem Badge System)
+   ========================================================================== */
+
+.badge {
+    font-weight: 500;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 0.375rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
 .badge-status-replied {
-    background-color: #d1e7dd;
-    color: #0f5132;
-    border: 1px solid #badbcc;
+    background-color: var(--success-bg) !important;
+    color: var(--success) !important;
+    border: 1px solid var(--success-border) !important;
 }
 
 .badge-status-not_replied {
-    background-color: #f8d7da;
-    color: #842029;
-    border: 1px solid #f5c2c7;
+    background-color: var(--danger-bg) !important;
+    color: var(--danger) !important;
+    border: 1px solid var(--danger-border) !important;
 }
 
 .badge-status-pending_review {
-    background-color: #fff3cd;
-    color: #664d03;
-    border: 1px solid #ffecb5;
+    background-color: var(--warning-bg) !important;
+    color: var(--warning) !important;
+    border: 1px solid var(--warning-border) !important;
 }
 
 .badge-status-unknown {
-    background-color: #e2e3e5;
-    color: #41464b;
-    border: 1px solid #d3d6d8;
+    background-color: #f8fafc !important;
+    color: #64748b !important;
+    border: 1px solid #e2e8f0 !important;
 }
 
 .badge-status-excluded {
-    background-color: #cfe2ff;
-    color: #084298;
-    border: 1px solid #b6d4fe;
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
 }
 
-.btn-kaldis {
-    background-color: var(--kaldis-accent);
-    color: #ffffff;
+/* Form Controls */
+.form-control, .form-select {
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+    border: 1px solid #cbd5e1;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.875rem;
+    color: #0f172a;
+    background-color: #ffffff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.15);
+    outline: none;
+}
+
+.form-label {
+    font-size: 0.825rem;
     font-weight: 600;
+    color: #334155;
+    margin-bottom: 0.35rem;
+}
+
+/* Modals */
+.modal-content {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 1.25rem 1.5rem;
+    background-color: #ffffff;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-subtle);
+    padding: 1rem 1.5rem;
+    background-color: #fafbfc;
+}
+
+/* Progress bar */
+.progress {
+    height: 8px;
+    border-radius: 9999px;
+    background-color: #e2e8f0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+}
+
+/* Avatar circle */
+.member-avatar-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* App Footer */
+.app-footer {
+    border-top: 1px solid var(--border);
+    background-color: #ffffff;
+    padding: 1rem 2rem;
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+/* Multi-segment Progress Bar */
+.multi-segment-bar {
+    height: 10px;
+    border-radius: 9999px;
+    background-color: #f1f5f9;
+    display: flex;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.multi-segment-bar > div {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+
+/* Nav Pills / Segmented Controls matching companysystem */
+.nav-pills {
+    background: #f1f5f9;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    gap: 0.25rem;
+}
+
+.nav-pills .nav-link {
+    color: #64748b;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.35rem 0.75rem;
+    transition: all 0.15s ease-in-out;
     border: none;
+    background: transparent;
 }
 
-.btn-kaldis:hover {
-    background-color: #b58432;
-    color: #ffffff;
+.nav-pills .nav-link:hover {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
 }
 
-.table-kaldis thead th {
-    background-color: #f1ede8;
-    color: var(--kaldis-primary);
+.nav-pills .nav-link.active {
+    background: #ffffff;
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     font-weight: 600;
-    border-bottom: 2px solid var(--kaldis-card-border);
 }
 
-/* Responsive Sidebar Drawer for Mobile & Tablets */
+/* Pagination matching companysystem */
+.pagination {
+    gap: 0.25rem;
+}
+
+.pagination .page-item .page-link {
+    border-radius: 0.375rem;
+    border-color: var(--border);
+    color: #475569;
+    font-size: 0.8125rem;
+    padding: 0.35rem 0.75rem;
+    font-weight: 500;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(180, 83, 9, 0.25);
+}
+
+.pagination .page-item:not(.active) .page-link:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+/* Code & Alert refinement */
+code {
+    color: #b45309;
+    background-color: #fffbeb;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+    border: 1px solid #fef3c7;
+}
+
+.alert {
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    padding: 0.875rem 1.25rem;
+    border-width: 1px;
+}
+
+.bg-amber-subtle {
+    background-color: var(--primary-subtle) !important;
+    color: var(--primary-dark) !important;
+    border: 1px solid var(--primary-light) !important;
+}
+
+/* Mobile responsive drawer */
 @media (max-width: 991.98px) {
     .app-sidebar {
         transform: translateX(-100%);
     }
-
+    
     .app-sidebar.show {
         transform: translateX(0);
     }
-
+    
     .app-content-wrapper {
         margin-left: 0;
     }
-
+    
     .sidebar-backdrop {
-        display: none;
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(2px);
         z-index: 1040;
+        display: none;
     }
-
+    
     .sidebar-backdrop.show {
         display: block;
     }
-}
-
-/* Real-Time Live Sync Pulsing Dot */
-.pulse-dot {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    background-color: #198754;
-    border-radius: 50%;
-    margin-right: 6px;
-    box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7);
-    animation: pulseGlow 1.8s infinite;
-}
-
-.pulse-dot.paused {
-    background-color: #6c757d;
-    box-shadow: none;
-    animation: none;
-}
-
-@keyframes pulseGlow {
-    0% {
-        box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7);
+    
+    .content-body {
+        padding: 1.25rem 1rem;
     }
-    70% {
-        box-shadow: 0 0 0 7px rgba(25, 135, 84, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(25, 135, 84, 0);
-    }
-}
-
-/* Flash animation for live updated rows */
-.row-highlight-new {
-    animation: rowFlash 2.5s ease-out;
-}
-
-@keyframes rowFlash {
-    0% {
-        background-color: #d1e7dd !important;
-    }
-    100% {
-        background-color: transparent !important;
-    }
-}
-
-/* Member Avatars */
-.member-avatar-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--kaldis-primary) 0%, var(--kaldis-accent) 100%);
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 0.85rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    border: 2px solid #ffffff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-/* Speech bubbles for Telegram responses */
-.speech-bubble {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.75rem;
-    border-top-left-radius: 0.15rem;
-    padding: 0.5rem 0.75rem;
-    position: relative;
-    display: inline-block;
-    max-width: 100%;
-}
-
-.speech-bubble.replied {
-    background: #eef7f2;
-    border-color: #badbcc;
-}
-
-/* Multi-segment response progress bar */
-.multi-segment-bar {
-    height: 10px;
-    border-radius: 5px;
-    overflow: hidden;
-    background-color: #e9ecef;
-    display: flex;
 }

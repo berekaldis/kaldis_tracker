@@ -1,44 +1,64 @@
 <?php
 use App\Services\AuthService;
+$user = AuthService::user();
+$userName = $user['username'] ?? 'User';
 $isOwner = AuthService::isOwner();
 $canTrack = AuthService::canTrack();
 $assignedGroupId = AuthService::assignedGroupId();
+
+$eatHour = (int)(new DateTime('now', new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'))))->format('G');
+if ($eatHour < 12) {
+    $greeting = 'Good Morning';
+} elseif ($eatHour < 18) {
+    $greeting = 'Good Afternoon';
+} else {
+    $greeting = 'Good Evening';
+}
 ?>
-<div class="row align-items-center mb-4">
-    <div class="col-md-7">
-        <h3 class="fw-bold mb-1" style="color: var(--kaldis-primary);">Response Monitoring Dashboard</h3>
-        <p class="text-muted small mb-0">
-            Real-time tracking of message responses across registered Kaldis Telegram groups.
-            <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
-                <span class="badge bg-success-subtle text-success border border-success-subtle ms-2">
-                    <i class="bi bi-chat-dots-fill me-1"></i> Tracking Each Conversation
-                </span>
-            <?php elseif (($trackingMode ?? '') === 'all_messages'): ?>
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">
-                    <i class="bi bi-globe me-1"></i> Tracking All Group Messages
-                </span>
-            <?php else: ?>
-                <span class="badge bg-secondary-subtle text-secondary border ms-2">
-                    <i class="bi bi-hash me-1"></i> #track Trigger Only
-                </span>
-            <?php endif; ?>
-        </p>
-    </div>
-    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex flex-wrap align-items-center justify-content-md-end gap-2">
-        <!-- Live Sync Pill -->
-        <div class="d-inline-flex align-items-center bg-white px-3 py-1 rounded-pill border shadow-sm small">
-            <span class="pulse-dot"></span>
-            <span class="fw-semibold text-dark me-2">Live Updates</span>
-            <span id="dashSyncTime" class="text-muted" style="font-size: 0.75rem;">Just now</span>
+<!-- Welcome Banner (companysystem Style) -->
+<div class="card border-0 shadow-sm mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #fffbf2 100%); border-left: 4px solid var(--primary) !important;">
+    <div class="card-body p-4">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    <span class="badge bg-amber-subtle text-amber-emphasis border border-warning" style="font-size: 0.72rem;">
+                        <i class="bi bi-cup-hot-fill me-1 text-primary"></i> Kaldi's Coffee
+                    </span>
+                    <?php if (($trackingMode ?? 'all_authorized') === 'all_authorized'): ?>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.72rem;">
+                            <i class="bi bi-chat-dots-fill me-1"></i> Tracking Each Conversation
+                        </span>
+                    <?php endif; ?>
+                    <?php if (!empty($userDept)): ?>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.72rem;">
+                            <i class="bi bi-building me-1"></i> <?= e($userDept) ?> Dept
+                        </span>
+                    <?php endif; ?>
+                </div>
+                <h3 class="fw-bold mb-1" style="color: #78350f; font-size: 1.65rem; letter-spacing: -0.02em;">
+                    <?= $greeting ?>, <?= e($userName) ?>!
+                </h3>
+                <p class="text-secondary small mb-0">
+                    Welcome to Kaldi's Coffee Response Monitoring Dashboard. <span class="fst-italic text-amber-900 fw-medium">"Sip a Coffee, Make a Memory."</span>
+                </p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0 d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
+                <!-- Live Sync Pill -->
+                <div class="d-inline-flex align-items-center bg-white px-3 py-1.5 rounded-pill border shadow-sm small">
+                    <span class="pulse-dot me-2"></span>
+                    <span class="fw-semibold text-dark me-1" style="font-size: 0.8rem;">Live Updates:</span>
+                    <span id="dashSyncTime" class="text-muted" style="font-size: 0.78rem;">Just now</span>
+                </div>
+                <?php if ($canTrack): ?>
+                    <button type="button" class="btn btn-kaldis shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
+                        <i class="bi bi-pin-angle me-1"></i> Track Message
+                    </button>
+                <?php endif; ?>
+                <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
+                    <i class="bi bi-people me-1"></i> <?= $isOwner ? 'Manage Groups' : 'View Groups' ?>
+                </a>
+            </div>
         </div>
-        <?php if ($canTrack): ?>
-            <button type="button" class="btn btn-kaldis shadow-sm btn-sm" data-bs-toggle="modal" data-bs-target="#modalManualTrack">
-                <i class="bi bi-pin-angle me-1"></i> Track Message
-            </button>
-        <?php endif; ?>
-        <a href="<?= url('groups') ?>" class="btn btn-outline-secondary btn-sm shadow-sm">
-            <i class="bi bi-people me-1"></i> <?= $isOwner ? 'Manage Groups' : 'View Groups' ?>
-        </a>
     </div>
 </div>
 

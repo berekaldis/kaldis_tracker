@@ -10,17 +10,17 @@ $isSuperAdmin = AuthService::isSuperAdmin();
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end align-items-center gap-2">
         <?php if (!empty($userDept)): ?>
-            <span class="badge bg-primary px-3 py-2 shadow-sm">
+            <span class="badge rounded-pill bg-primary-subtle px-3 py-2">
                 <i class="bi bi-building me-1"></i> <?= e($userDept) ?> Department Groups
             </span>
         <?php else: ?>
-            <span class="badge bg-light text-dark border px-3 py-2">
+            <span class="badge rounded-pill bg-light text-secondary border px-3 py-2">
                 <i class="bi bi-globe me-1"></i> All Departments (Company-wide)
             </span>
         <?php endif; ?>
 
         <?php if ($isOwner): ?>
-            <button type="button" class="btn btn-kaldis shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRegisterGroup">
+            <button type="button" class="btn btn-kaldis btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRegisterGroup">
                 <i class="bi bi-plus-circle me-1"></i> Register New Group
             </button>
         <?php endif; ?>
@@ -69,7 +69,7 @@ $isSuperAdmin = AuthService::isSuperAdmin();
                                 </div>
                             </td>
                             <td>
-                                <span class="badge bg-amber-subtle text-dark border border-warning" style="font-size: 0.8rem;">
+                                <span class="badge bg-amber-subtle rounded-pill">
                                     <i class="bi bi-building me-1 text-primary"></i><?= e($g['department'] ?? 'General') ?>
                                 </span>
                                 <?php if ($isOwner): ?>
@@ -106,9 +106,9 @@ $isSuperAdmin = AuthService::isSuperAdmin();
                             </td>
                             <td class="text-center">
                                 <?php if ($g['is_active']): ?>
-                                    <span class="badge bg-success">Active</span>
+                                    <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">Active</span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">Paused</span>
+                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary">Paused</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-center fw-semibold">
