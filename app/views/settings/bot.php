@@ -158,11 +158,101 @@
         </div>
     </div>
 
-    <!-- Section 2: Tracking Preference -->
+    <!-- Section 2: Response Time Limitation & Deadline Summary Notification -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-stopwatch-fill text-primary me-2"></i> 2. Response Time Limitation &amp; Deadline Summary
+            </h6>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1">
+                <?= $defaultDeadlineHours > 0 ? "{$defaultDeadlineHours}h Limitation" : "Manual Only" ?>
+            </span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Default Response Time Limitation (Deadline / SLA)</label>
+                    <select name="default_deadline_hours" class="form-select font-monospace">
+                        <option value="0" <?= $defaultDeadlineHours === 0 ? 'selected' : '' ?>>No Limitation / Manual</option>
+                        <option value="1" <?= $defaultDeadlineHours === 1 ? 'selected' : '' ?>>1 Hour</option>
+                        <option value="2" <?= $defaultDeadlineHours === 2 ? 'selected' : '' ?>>2 Hours</option>
+                        <option value="4" <?= $defaultDeadlineHours === 4 ? 'selected' : '' ?>>4 Hours</option>
+                        <option value="8" <?= $defaultDeadlineHours === 8 ? 'selected' : '' ?>>8 Hours</option>
+                        <option value="12" <?= $defaultDeadlineHours === 12 ? 'selected' : '' ?>>12 Hours</option>
+                        <option value="24" <?= $defaultDeadlineHours === 24 ? 'selected' : '' ?>>24 Hours (1 Day) — Standard</option>
+                        <option value="48" <?= $defaultDeadlineHours === 48 ? 'selected' : '' ?>>48 Hours (2 Days)</option>
+                        <option value="72" <?= $defaultDeadlineHours === 72 ? 'selected' : '' ?>>72 Hours (3 Days)</option>
+                        <option value="168" <?= $defaultDeadlineHours === 168 ? 'selected' : '' ?>>7 Days (1 Week)</option>
+                    </select>
+                    <div class="form-text small">
+                        Automatically sets the reply deadline on new tracked messages from authorized senders.
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Deadline Summary Report Notification</label>
+                    <div class="p-3 bg-light rounded border h-100">
+                        <div class="form-check form-switch mb-1">
+                            <input class="form-check-input" type="checkbox" id="notifySenderSwitch" name="notify_sender_on_deadline" value="1" <?= $notifySenderOnDeadline ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold text-dark" for="notifySenderSwitch">
+                                Send Summary Report to Authorized Sender
+                            </label>
+                        </div>
+                        <div class="small text-muted mt-1">
+                            When the time is done, the bot compiles and delivers a full report (reply percentage, who responded, and who hasn't) directly to the sender.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Auto-Delete Original Tracked Messages (Data Retention) -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="card-title mb-0 fw-bold text-dark">
+                <i class="bi bi-trash3-fill text-danger me-2"></i> 3. Auto-Delete Original Tracked Messages (Retention)
+            </h6>
+            <span class="badge bg-secondary-subtle text-secondary border rounded-pill px-2.5 py-1">
+                <?= $retentionDays > 0 ? "Purge after {$retentionDays} days" : "Keep Indefinitely" ?>
+            </span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-7">
+                    <label class="form-label small fw-semibold">Auto-Delete Tracked Messages Period</label>
+                    <select name="tracked_message_retention_days" class="form-select font-monospace">
+                        <option value="0" <?= $retentionDays === 0 ? 'selected' : '' ?>>Never (Keep Indefinitely)</option>
+                        <option value="7" <?= $retentionDays === 7 ? 'selected' : '' ?>>7 Days (1 Week)</option>
+                        <option value="14" <?= $retentionDays === 14 ? 'selected' : '' ?>>14 Days (2 Weeks)</option>
+                        <option value="15" <?= $retentionDays === 15 ? 'selected' : '' ?>>15 Days</option>
+                        <option value="30" <?= $retentionDays === 30 ? 'selected' : '' ?>>30 Days (1 Month) — Recommended</option>
+                        <option value="60" <?= $retentionDays === 60 ? 'selected' : '' ?>>60 Days (2 Months)</option>
+                        <option value="90" <?= $retentionDays === 90 ? 'selected' : '' ?>>90 Days (3 Months)</option>
+                        <option value="180" <?= $retentionDays === 180 ? 'selected' : '' ?>>180 Days (6 Months)</option>
+                    </select>
+                    <div class="form-text small">
+                        Automatically cleans up older tracked messages and reply logs from the database.
+                    </div>
+                </div>
+
+                <div class="col-md-5 text-md-end pt-md-3 d-flex flex-wrap gap-2 justify-content-md-end">
+                    <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" onclick="document.getElementById('formRunCleanup').submit();" title="Trigger retention purge immediately">
+                        <i class="bi bi-trash3 me-1"></i> Run Cleanup Now
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm shadow-sm" onclick="document.getElementById('formSendSummaries').submit();" title="Check and dispatch any due deadline summaries immediately">
+                        <i class="bi bi-send-check me-1"></i> Check Due Summaries
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Tracking Preference -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white py-3">
             <h6 class="card-title mb-0 fw-bold text-dark">
-                <i class="bi bi-sliders text-primary me-2"></i> 2. Tracking Preference
+                <i class="bi bi-sliders text-primary me-2"></i> 4. Tracking Preference
             </h6>
         </div>
         <div class="card-body p-4">
@@ -196,9 +286,17 @@
     <!-- Save Action Bar -->
     <div class="d-flex justify-content-end mb-5">
         <button type="submit" class="btn btn-kaldis shadow-sm px-4 py-2">
-            <i class="bi bi-check2-circle me-1"></i> Save Bot Configuration
+            <i class="bi bi-check2-circle me-1"></i> Save Configuration &amp; Policies
         </button>
     </div>
+</form>
+
+<!-- Dedicated Action Forms for Manual Execution -->
+<form id="formRunCleanup" action="<?= url('settings/run-cleanup') ?>" method="POST" class="d-none">
+    <?= csrf_field() ?>
+</form>
+<form id="formSendSummaries" action="<?= url('settings/send-due-summaries') ?>" method="POST" class="d-none">
+    <?= csrf_field() ?>
 </form>
 
 <script>

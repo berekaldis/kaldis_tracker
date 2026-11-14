@@ -28,6 +28,9 @@ class SettingsController
         $trackAllMessages = (bool)config('telegram.track_all_messages', true);
         $trackHashtag = config('telegram.track_hashtag', '#track');
         $trackCommand = config('telegram.track_command', '/track');
+        $defaultDeadlineHours = (int)config('telegram.default_deadline_hours', 24);
+        $notifySenderOnDeadline = (bool)(int)config('telegram.notify_sender_on_deadline', 1);
+        $retentionDays = (int)config('telegram.tracked_message_retention_days', 30);
 
         // Test Live Bot & Webhook Status if token is present
         $botInfo = null;
@@ -47,6 +50,9 @@ class SettingsController
             'trackAllMessages' => $trackAllMessages,
             'trackHashtag' => $trackHashtag,
             'trackCommand' => $trackCommand,
+            'defaultDeadlineHours' => $defaultDeadlineHours,
+            'notifySenderOnDeadline' => $notifySenderOnDeadline,
+            'retentionDays' => $retentionDays,
             'botInfo' => $botInfo,
             'webhookInfo' => $webhookInfo,
             'pageTitle' => 'Bot Configuration',
@@ -65,6 +71,16 @@ class SettingsController
         $botUsername = trim(ltrim($_POST['bot_username'] ?? '', '@'));
         $webhookSecret = trim($_POST['webhook_secret'] ?? '');
         $webhookUrl = trim($_POST['webhook_url'] ?? '');
+        $trackingMode = trim($_POST['tracking_mode'] ?? 'all_authorized');
+        if (!in_array($trackingMode, ['all_authorized', 'all_messages', 'trigger_only'])) {
+            $trackingMode = 'all_authorized';
+        }
+        $trackAllMessages = ($trackingMode !== 'trigger_only') ? '1' : '0';
+        $trackHashtag = trim($_POST['track_hashtag'] ?? '#track');
+        $trackCommand = trim($_POST['track_command'] ?? '/track');
+        $defaultDeadlineHours = max(0, (int)($_POST['default_deadline_hours'] ?? 24));
+        $notifySenderOnDeadline = !empty($_POST['notify_sender_on_deadline']) ? '1' : '0';
+        $retentionDays = max(0, (int)($_POST['tracked_message_retention_days'] ?? 30));
 
         $settingsToSave = [
             'telegram_bot_token' => $botToken,
@@ -75,6 +91,10 @@ class SettingsController
             'telegram_track_all_messages' => $trackAllMessages,
             'telegram_track_hashtag' => $trackHashtag,
             'telegram_track_command' => $trackCommand,
+            'telegram_default_deadline_hours' => (string)$defaultDeadlineHours,
+            'telegram_notify_sender_on_deadline' => $notifySenderOnDeadline,
+            'telegram_tracked_message_retention_days' => (string)$retentionDays,
+            'app_retention_days' => (string)$retentionDays,
         ];
 
         // Only update global authorized user IDs if explicitly provided
@@ -98,9 +118,53 @@ class SettingsController
             'webhook_url' => $webhookUrl,
             'tracking_mode' => $trackingMode,
             'track_hashtag' => $trackHashtag,
+            'default_deadline_hours' => $defaultDeadlineHours,
+            'notify_sender_on_deadline' => $notifySenderOnDeadline,
+            'retention_days' => $retentionDays,
         ]);
 
-        flash('success', 'Telegram Bot configuration has been successfully saved!');
+        flash('success', 'Telegram Bot configuration & tracking policy have been successfully saved!');
+        redirect(url('settings/bot'));
+    }
+
+    /**
+     * Run manual data retention purge of expired tracked messages.
+     */
+    public function runCleanup(): void
+    {
+        AuthService::requireSuperAdmin();
+        AuthService::verifyCsrf();
+
+        $res = MessageTrackingService::autoDeleteOldTrackedMessages();
+
+        if ($res['status'] === 'purged') {
+            flash('success', "Auto-delete cleanup complete: {$res['deleted_count']} expired tracked message(s) older than {$res['retention_days']} days removed.");
+        } elseif ($res['status'] === 'no_expired_messages') {
+            flash('info', "No tracked messages older than {$res['retention_days']} days were found.");
+        } else {
+            flash('warning', "Retention auto-cleanup is currently disabled (set to 'Never').");
+        }
+
+        redirect(url('settings/bot'));
+    }
+
+    /**
+     * Check and dispatch any due deadline summary notifications to authorized senders.
+     */
+    public function sendDueSummaries(): void
+    {
+        AuthService::requireSuperAdmin();
+        AuthService::verifyCsrf();
+
+        $service = new MessageTrackingService();
+        $res = $service->processExpiredDeadlinesAndSendSummaries();
+
+        if (!empty($res['summaries_sent'])) {
+            flash('success', "Deadline check complete: {$res['summaries_sent']} summary report(s) delivered to authorized senders!");
+        } else {
+            flash('info', "No expired tracked message deadlines currently require summary report dispatch.");
+        }
+
         redirect(url('settings/bot'));
     }
 

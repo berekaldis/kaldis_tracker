@@ -56,6 +56,20 @@ class MessageTrackingService
                 );
             } catch (\Throwable) {}
 
+            // Check for expired deadlines and deliver single-message summary reports to authorized senders
+            try {
+                $this->processExpiredDeadlinesAndSendSummaries();
+            } catch (\Throwable $e) {
+                error_log("Expired deadline summary processing error: " . $e->getMessage());
+            }
+
+            // Periodic auto-delete retention purge
+            try {
+                self::autoDeleteOldTrackedMessagesThrottled();
+            } catch (\Throwable $e) {
+                error_log("Auto delete purge error: " . $e->getMessage());
+            }
+
             return $result;
         } catch (\Throwable $e) {
             error_log("Error processing update {$updateId}: " . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -526,6 +540,18 @@ class MessageTrackingService
     ): array {
         // Extract reference code if present (e.g. #task-123 or #123)
         $referenceCode = $this->extractReferenceCode($text);
+
+        // If no explicit deadline passed, apply default configured response limitation
+        if (empty($deadlineAt)) {
+            $defaultHours = (int)config('telegram.default_deadline_hours', 24);
+            if ($defaultHours > 0) {
+                $baseTime = strtotime($date);
+                if ($baseTime <= 0) {
+                    $baseTime = time();
+                }
+                $deadlineAt = gmdate('Y-m-d H:i:s', $baseTime + ($defaultHours * 3600));
+            }
+        }
 
         // 1. Ensure database schema integrity & auto-repair missing columns
         Database::ensureSchemaIntegrity();
@@ -1266,5 +1292,269 @@ class MessageTrackingService
             'message_reaction' => $payload['message_reaction']['chat']['id'] ?? null,
             default => null,
         };
+    }
+
+    /**
+     * Check for expired deadlines and send summary notification directly to Authorized Sender.
+     */
+    public function processExpiredDeadlinesAndSendSummaries(): array
+    {
+        $notifyEnabled = (bool)(int)config('telegram.notify_sender_on_deadline', 1);
+        if (!$notifyEnabled) {
+            return ['status' => 'notifications_disabled', 'count' => 0];
+        }
+
+        Database::ensureSchemaIntegrity();
+
+        $now = utc_now();
+        // Fetch up to 10 expired tracked messages that haven't had their summary report sent
+        $expiredMessages = Database::fetchAll(
+            "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id 
+             FROM tracked_messages tm
+             JOIN telegram_groups tg ON tm.group_id = tg.id
+             WHERE tm.is_active = 1 
+               AND tm.deadline_at IS NOT NULL 
+               AND tm.deadline_at <= :now 
+               AND (tm.summary_sent_at IS NULL OR tm.summary_sent_at = '0000-00-00 00:00:00')
+             ORDER BY tm.deadline_at ASC 
+             LIMIT 10",
+            [':now' => $now]
+        );
+
+        if (empty($expiredMessages)) {
+            return ['status' => 'no_due_summaries', 'count' => 0];
+        }
+
+        $processed = [];
+        $dashboardCtrl = new \App\Controllers\DashboardController();
+        $tg = new \App\Services\TelegramService();
+
+        foreach ($expiredMessages as $msg) {
+            $msgId = (int)$msg['id'];
+            $groupId = (int)$msg['group_id'];
+            $senderUserId = (int)($msg['telegram_user_id'] ?? $msg['user_id'] ?? 0);
+            $msgDate = $msg['message_date'];
+
+            // 1. Calculate stats for this message
+            $stats = $dashboardCtrl->calculateMessageStats($msgId, $groupId, $msgDate);
+
+            // 2. Fetch roster breakdown: who replied and who is still pending
+            $roster = Database::fetchAll(
+                "SELECT m.id, m.telegram_user_id, m.full_name, m.username, mr.status, mr.response_date
+                 FROM group_members gm
+                 JOIN members m ON gm.member_id = m.id
+                 LEFT JOIN message_responses mr ON mr.tracked_message_id = :tmid AND mr.member_telegram_user_id = m.telegram_user_id
+                 WHERE gm.group_id = :gid 
+                   AND gm.joined_at <= :mdate 
+                   AND (gm.left_at IS NULL OR gm.left_at > :mdate2)
+                   AND m.is_bot = 0 
+                   AND m.telegram_user_id != :sender_id",
+                [
+                    ':tmid' => $msgId,
+                    ':gid' => $groupId,
+                    ':mdate' => $msgDate,
+                    ':mdate2' => $msgDate,
+                    ':sender_id' => $senderUserId
+                ]
+            );
+
+            $repliedList = [];
+            $pendingList = [];
+
+            foreach ($roster as $mem) {
+                $displayName = trim($mem['full_name']);
+                if (!empty($mem['username'])) {
+                    $displayName .= ' (@' . $mem['username'] . ')';
+                }
+
+                if (($mem['status'] ?? '') === 'replied') {
+                    $turnaround = '';
+                    if (!empty($mem['response_date'])) {
+                        $diff = max(0, strtotime($mem['response_date']) - strtotime($msgDate));
+                        $turnaround = ' (' . format_duration($diff) . ')';
+                    }
+                    $repliedList[] = $displayName . $turnaround;
+                } else {
+                    $pendingList[] = $displayName;
+                }
+            }
+
+            // Fetch sender info for display
+            $senderMember = Database::fetch("SELECT full_name, username FROM members WHERE telegram_user_id = :uid", [':uid' => $senderUserId]);
+            $senderName = !empty($senderMember['full_name']) ? $senderMember['full_name'] : "Authorized Sender";
+
+            // 3. Format detailed summary report
+            $excerpt = mb_strimwidth($msg['message_text'], 0, 100, '...');
+            $deadlineDisplay = !empty($msg['deadline_at']) ? format_tz($msg['deadline_at']) : 'Completed';
+            $portalUrl = rtrim(config('app.url', ''), '/') . '/messages/view?id=' . $msgId;
+
+            $report = "☕ <b>Kaldi's Coffee &bull; Deadline Summary Report</b>\n\n";
+            $report .= "📋 <b>Tracked Message:</b> <i>\"" . e($excerpt) . "\"</i>\n";
+            $report .= "👥 <b>Group:</b> " . e($msg['group_title']) . "\n";
+            $report .= "⏰ <b>Time Limitation:</b> Ended at " . e($deadlineDisplay) . "\n\n";
+
+            $rate = number_format($stats['percentage'], 1);
+            $report .= "📊 <b>Final Response Rate:</b> <b>{$rate}%</b> ({$stats['replied']}/{$stats['eligible']} Replied)\n\n";
+
+            if (!empty($repliedList)) {
+                $report .= "✅ <b>Replied (" . count($repliedList) . "):</b>\n";
+                $showReplied = array_slice($repliedList, 0, 15);
+                foreach ($showReplied as $rName) {
+                    $report .= "• " . e($rName) . "\n";
+                }
+                if (count($repliedList) > 15) {
+                    $report .= "<i>...and " . (count($repliedList) - 15) . " more</i>\n";
+                }
+                $report .= "\n";
+            }
+
+            if (!empty($pendingList)) {
+                $report .= "⚠️ <b>Not Replied / Pending (" . count($pendingList) . "):</b>\n";
+                $showPending = array_slice($pendingList, 0, 20);
+                foreach ($showPending as $pName) {
+                    $report .= "• " . e($pName) . "\n";
+                }
+                if (count($pendingList) > 20) {
+                    $report .= "<i>...and " . (count($pendingList) - 20) . " more</i>\n";
+                }
+                $report .= "\n";
+            }
+
+            if (!empty($stats['fastest_turnaround_formatted']) && $stats['fastest_turnaround_formatted'] !== '—') {
+                $report .= "⚡ <b>Fastest Response:</b> {$stats['fastest_turnaround_formatted']}\n";
+            }
+            if (!empty($stats['avg_turnaround_formatted']) && $stats['avg_turnaround_formatted'] !== '—') {
+                $report .= "⏱️ <b>Avg Turnaround:</b> {$stats['avg_turnaround_formatted']}\n";
+            }
+
+            $report .= "\n🔗 <a href=\"" . e($portalUrl) . "\">Open Detailed Audit on Dashboard</a>";
+
+            // 4. Send report to Authorized Sender
+            $sentSuccessfully = false;
+            $deliveryMethod = 'direct_dm';
+
+            if ($senderUserId > 0) {
+                // Try sending directly in private chat to the sender
+                $sendResp = $tg->sendMessage($senderUserId, $report, null, null, 'HTML');
+                if (!empty($sendResp['ok'])) {
+                    $sentSuccessfully = true;
+                    $deliveryMethod = 'private_chat';
+                } else {
+                    // Private chat failed (user has not started a chat with the bot or blocked).
+                    // Fall back to sending in the group where the message was posted!
+                    $mention = !empty($senderMember['username']) ? '@' . $senderMember['username'] : $senderName;
+                    $groupReport = "🔔 <b>Summary Report for {$mention} (Time Limitation Expired):</b>\n\n" . $report;
+                    $sendRespGroup = $tg->sendMessage(
+                        (int)$msg['telegram_chat_id'],
+                        $groupReport,
+                        (int)$msg['telegram_message_id'],
+                        !empty($msg['thread_id']) ? (int)$msg['thread_id'] : null,
+                        'HTML'
+                    );
+                    if (!empty($sendRespGroup['ok'])) {
+                        $sentSuccessfully = true;
+                        $deliveryMethod = 'group_fallback';
+                    }
+                }
+            } else {
+                $sendRespGroup = $tg->sendMessage(
+                    (int)$msg['telegram_chat_id'],
+                    $report,
+                    (int)$msg['telegram_message_id'],
+                    !empty($msg['thread_id']) ? (int)$msg['thread_id'] : null,
+                    'HTML'
+                );
+                if (!empty($sendRespGroup['ok'])) {
+                    $sentSuccessfully = true;
+                    $deliveryMethod = 'group_channel';
+                }
+            }
+
+            // 5. Mark as sent so it is never re-sent
+            Database::execute(
+                "UPDATE tracked_messages SET summary_sent_at = :now WHERE id = :id",
+                [':now' => utc_now(), ':id' => $msgId]
+            );
+
+            AuditService::log('deadline_summary_sent', 'tracked_message', (string)$msgId, [
+                'sender_user_id' => $senderUserId,
+                'delivery_method' => $deliveryMethod,
+                'stats' => $stats,
+                'success' => $sentSuccessfully,
+            ]);
+
+            $processed[] = [
+                'message_id' => $msgId,
+                'sender_user_id' => $senderUserId,
+                'delivery_method' => $deliveryMethod,
+                'success' => $sentSuccessfully,
+            ];
+        }
+
+        return ['status' => 'processed', 'summaries_sent' => count($processed), 'details' => $processed];
+    }
+
+    /**
+     * Throttled check for auto-deleting old tracked messages.
+     */
+    public static function autoDeleteOldTrackedMessagesThrottled(): void
+    {
+        static $lastRun = 0;
+        if (time() - $lastRun < 3600) { // Throttle: run at most once per hour per process
+            return;
+        }
+        $lastRun = time();
+        self::autoDeleteOldTrackedMessages();
+    }
+
+    /**
+     * Automatically purge old tracked messages and their reply logs based on retention days setting.
+     */
+    public static function autoDeleteOldTrackedMessages(): array
+    {
+        $retentionDays = (int)config('telegram.tracked_message_retention_days', 0);
+        if ($retentionDays <= 0) {
+            $retentionDays = (int)config('app.retention_days', 0);
+        }
+
+        if ($retentionDays <= 0) {
+            return ['status' => 'retention_disabled', 'deleted_count' => 0];
+        }
+
+        Database::ensureSchemaIntegrity();
+
+        try {
+            $oldMessages = Database::fetchAll(
+                "SELECT id FROM tracked_messages WHERE message_date < (UTC_TIMESTAMP() - INTERVAL :days DAY)",
+                [':days' => $retentionDays]
+            );
+
+            if (empty($oldMessages)) {
+                return ['status' => 'no_expired_messages', 'deleted_count' => 0];
+            }
+
+            $ids = array_map('intval', array_column($oldMessages, 'id'));
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+            // Delete corresponding message responses first
+            Database::execute("DELETE FROM message_responses WHERE tracked_message_id IN ({$placeholders})", $ids);
+
+            // Delete tracked messages
+            Database::execute("DELETE FROM tracked_messages WHERE id IN ({$placeholders})", $ids);
+
+            AuditService::log('tracked_messages_purged_by_retention', 'system', 'retention', [
+                'retention_days' => $retentionDays,
+                'purged_count' => count($ids),
+            ]);
+
+            return [
+                'status' => 'purged',
+                'retention_days' => $retentionDays,
+                'deleted_count' => count($ids),
+            ];
+        } catch (\Throwable $e) {
+            error_log("Auto-delete retention error: " . $e->getMessage());
+            return ['status' => 'error', 'error' => $e->getMessage(), 'deleted_count' => 0];
+        }
     }
 }

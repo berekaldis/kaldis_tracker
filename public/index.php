@@ -212,6 +212,8 @@ match (true) {
     // Super Admin: Bot Configuration & Admin Management routes
     $path === 'settings/bot' && $requestMethod === 'GET' => (new SettingsController())->botConfig(),
     $path === 'settings/bot' && $requestMethod === 'POST' => (new SettingsController())->saveBotConfig(),
+    $path === 'settings/run-cleanup' && $requestMethod === 'POST' => (new SettingsController())->runCleanup(),
+    $path === 'settings/send-due-summaries' && $requestMethod === 'POST' => (new SettingsController())->sendDueSummaries(),
     $path === 'settings/set-webhook' && $requestMethod === 'POST' => (new SettingsController())->setWebhook(),
     $path === 'settings/delete-webhook' && $requestMethod === 'POST' => (new SettingsController())->deleteWebhook(),
     $path === 'settings/admins' && $requestMethod === 'GET' => (new SettingsController())->admins(),

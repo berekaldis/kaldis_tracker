@@ -244,6 +244,12 @@ class Database
                 $log[] = 'Added deadline_at to tracked_messages';
             }
 
+            // Check summary_sent_at (tracks when deadline summary report was delivered to authorized sender)
+            if (!isset($tmCols['summary_sent_at'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN summary_sent_at DATETIME NULL AFTER deadline_at"));
+                $log[] = 'Added summary_sent_at to tracked_messages';
+            }
+
             // Check edited_at
             if (!isset($tmCols['edited_at'])) {
                 $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN edited_at DATETIME NULL AFTER deadline_at"));
@@ -365,7 +371,11 @@ class Database
                 ('telegram_tracking_mode', 'all_authorized', UTC_TIMESTAMP()),
                 ('telegram_track_all_messages', '1', UTC_TIMESTAMP()),
                 ('telegram_track_hashtag', '#track', UTC_TIMESTAMP()),
-                ('telegram_track_command', '/track', UTC_TIMESTAMP())
+                ('telegram_track_command', '/track', UTC_TIMESTAMP()),
+                ('telegram_default_deadline_hours', '24', UTC_TIMESTAMP()),
+                ('telegram_notify_sender_on_deadline', '1', UTC_TIMESTAMP()),
+                ('telegram_tracked_message_retention_days', '30', UTC_TIMESTAMP()),
+                ('app_retention_days', '30', UTC_TIMESTAMP())
             "));
         } catch (\Throwable) {}
 

@@ -6,6 +6,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 1. Tracked Messages Table
 ALTER TABLE `tg_tracked_messages` ADD COLUMN IF NOT EXISTS `telegram_user_id` BIGINT NOT NULL DEFAULT 0 AFTER `telegram_message_id`;
 ALTER TABLE `tg_tracked_messages` ADD COLUMN IF NOT EXISTS `deadline_at` DATETIME NULL AFTER `message_date`;
+ALTER TABLE `tg_tracked_messages` ADD COLUMN IF NOT EXISTS `summary_sent_at` DATETIME NULL AFTER `deadline_at`;
 ALTER TABLE `tg_tracked_messages` MODIFY COLUMN `tracking_source` ENUM('hashtag', 'command', 'dashboard', 'auto') NOT NULL DEFAULT 'auto';
 
 -- 2. Message Responses Table
