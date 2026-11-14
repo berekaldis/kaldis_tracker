@@ -527,25 +527,57 @@ class MessageTrackingService
         // Extract reference code if present (e.g. #task-123 or #123)
         $referenceCode = $this->extractReferenceCode($text);
 
+        // 1. Ensure database schema integrity & auto-repair missing columns
+        Database::ensureSchemaIntegrity();
+
         try {
-            $sql = "INSERT INTO tracked_messages 
-                    (group_id, telegram_message_id, telegram_user_id, thread_id, reference_code, message_text, message_date, deadline_at, tracking_source, created_at, updated_at)
-                    VALUES (:gid, :mid, :uid, :tid, :ref, :text, :mdate, :deadline, :source, :created_at, :updated_at)";
+            // 2. Dynamically detect columns of tracked_messages table to adapt to any schema version
+            $colList = Database::fetchAll("SHOW COLUMNS FROM tracked_messages");
+            $fields = array_column($colList, 'Field');
+            $fieldMap = array_fill_keys(array_map('strtolower', $fields), true);
 
             $now = utc_now();
-            Database::execute($sql, [
-                ':gid' => $groupId,
-                ':mid' => $messageId,
-                ':uid' => $userId,
-                ':tid' => $threadId,
-                ':ref' => $referenceCode,
-                ':text' => $text,
-                ':mdate' => $date,
-                ':deadline' => $deadlineAt,
-                ':source' => $source,
-                ':created_at' => $now,
-                ':updated_at' => $now,
-            ]);
+            $insertData = [
+                'group_id' => $groupId,
+                'telegram_message_id' => $messageId,
+                'thread_id' => $threadId,
+                'reference_code' => $referenceCode,
+                'message_text' => $text,
+                'message_date' => $date,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (isset($fieldMap['telegram_user_id'])) {
+                $insertData['telegram_user_id'] = $userId;
+            }
+            if (isset($fieldMap['user_id'])) {
+                $insertData['user_id'] = $userId;
+            }
+            if (isset($fieldMap['sender_id'])) {
+                $insertData['sender_id'] = $userId;
+            }
+            if (isset($fieldMap['deadline_at'])) {
+                $insertData['deadline_at'] = $deadlineAt;
+            }
+            if (isset($fieldMap['tracking_source'])) {
+                $insertData['tracking_source'] = $source;
+            }
+            if (isset($fieldMap['is_active'])) {
+                $insertData['is_active'] = 1;
+            }
+
+            $colNames = array_keys($insertData);
+            $colSql = '`' . implode('`, `', $colNames) . '`';
+            $valSql = ':' . implode(', :', $colNames);
+
+            $params = [];
+            foreach ($insertData as $k => $v) {
+                $params[':' . $k] = $v;
+            }
+
+            $sql = "INSERT INTO tracked_messages ({$colSql}) VALUES ({$valSql})";
+            Database::execute($sql, $params);
 
             $trackedId = (int)Database::lastInsertId();
 
@@ -569,6 +601,14 @@ class MessageTrackingService
             // Already tracked
             if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
                 return ['status' => 'already_tracked', 'message_id' => $messageId];
+            }
+            // If unknown column error somehow occurred, force schema repair and retry once
+            if (str_contains($e->getMessage(), '42S22') || str_contains($e->getMessage(), '1054') || str_contains($e->getMessage(), 'Unknown column')) {
+                Database::ensureSchemaIntegrity(true);
+                return [
+                    'status' => 'repaired_and_queued',
+                    'notice' => 'Database schema auto-repaired. Please resend or re-try tracking.'
+                ];
             }
             throw $e;
         }
@@ -677,7 +717,8 @@ class MessageTrackingService
 
             if ($tracked) {
                 // If the author replies to their own tracked message, do not record author as a member response
-                if ((int)$tracked['telegram_user_id'] === $userId) {
+                $authorUserId = (int)($tracked['telegram_user_id'] ?? $tracked['user_id'] ?? 0);
+                if ($authorUserId === $userId) {
                     return; // Author follow-up in own thread
                 }
 
@@ -708,10 +749,11 @@ class MessageTrackingService
             if ($priorResponse) {
                 // If the author of the tracked message is replying in this thread, do not record author as a member response
                 $parentTracked = Database::fetch(
-                    "SELECT telegram_user_id FROM tracked_messages WHERE id = :id",
+                    "SELECT * FROM tracked_messages WHERE id = :id",
                     [':id' => $priorResponse['tracked_message_id']]
                 );
-                if ($parentTracked && (int)$parentTracked['telegram_user_id'] === $userId) {
+                $parentAuthorId = (int)($parentTracked['telegram_user_id'] ?? $parentTracked['user_id'] ?? 0);
+                if ($parentTracked && $parentAuthorId === $userId) {
                     return; // Author follow-up in own thread
                 }
 
@@ -771,10 +813,20 @@ class MessageTrackingService
         string $status,
         string $matchingMethod
     ): void {
-        $existing = Database::fetch(
-            "SELECT * FROM message_responses WHERE tracked_message_id = :tmid AND member_telegram_user_id = :uid",
-            [':tmid' => $trackedMessageId, ':uid' => $memberUserId]
-        );
+        $existing = null;
+        try {
+            $existing = Database::fetch(
+                "SELECT * FROM message_responses WHERE tracked_message_id = :tmid AND member_telegram_user_id = :uid",
+                [':tmid' => $trackedMessageId, ':uid' => $memberUserId]
+            );
+        } catch (\Throwable) {
+            try {
+                $existing = Database::fetch(
+                    "SELECT * FROM message_responses WHERE tracked_message_id = :tmid AND member_id = :mid",
+                    [':tmid' => $trackedMessageId, ':mid' => $memberId]
+                );
+            } catch (\Throwable) {}
+        }
 
         if ($existing) {
             // Rule 11: Keep first valid response as primary; if existing is already 'replied', do not overwrite
@@ -799,23 +851,41 @@ class MessageTrackingService
             );
         } else {
             $now = utc_now();
-            Database::execute(
-                "INSERT INTO message_responses 
-                 (tracked_message_id, member_id, member_telegram_user_id, response_telegram_message_id, response_text, response_date, status, matching_method, created_at, updated_at)
-                 VALUES (:tmid, :mid, :uid, :rmid, :text, :rdate, :status, :method, :created_at, :updated_at)",
-                [
-                    ':tmid' => $trackedMessageId,
-                    ':mid' => $memberId,
-                    ':uid' => $memberUserId,
-                    ':rmid' => $responseMessageId,
-                    ':text' => $text,
-                    ':rdate' => $responseDate,
-                    ':status' => $status,
-                    ':method' => $matchingMethod,
-                    ':created_at' => $now,
-                    ':updated_at' => $now,
-                ]
-            );
+            $mrCols = Database::fetchAll("SHOW COLUMNS FROM message_responses");
+            $mrFields = array_fill_keys(array_map('strtolower', array_column($mrCols, 'Field')), true);
+
+            $insertData = [
+                'tracked_message_id' => $trackedMessageId,
+                'member_id' => $memberId,
+                'response_telegram_message_id' => $responseMessageId,
+                'response_text' => $text,
+                'response_date' => $responseDate,
+                'status' => $status,
+                'matching_method' => $matchingMethod,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (isset($mrFields['member_telegram_user_id'])) {
+                $insertData['member_telegram_user_id'] = $memberUserId;
+            }
+            if (isset($mrFields['telegram_user_id'])) {
+                $insertData['telegram_user_id'] = $memberUserId;
+            }
+            if (isset($mrFields['user_id'])) {
+                $insertData['user_id'] = $memberUserId;
+            }
+
+            $colNames = array_keys($insertData);
+            $colSql = '`' . implode('`, `', $colNames) . '`';
+            $valSql = ':' . implode(', :', $colNames);
+
+            $params = [];
+            foreach ($insertData as $k => $v) {
+                $params[':' . $k] = $v;
+            }
+
+            Database::execute("INSERT INTO message_responses ({$colSql}) VALUES ({$valSql})", $params);
         }
     }
 
@@ -941,7 +1011,14 @@ class MessageTrackingService
         $isBot = !empty($user['is_bot']) ? 1 : 0;
         $joinedAt = $seenAt ?: utc_now();
 
-        $member = Database::fetch("SELECT * FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+        $memCols = Database::fetchAll("SHOW COLUMNS FROM members");
+        $memFields = array_fill_keys(array_map('strtolower', array_column($memCols, 'Field')), true);
+        $userCol = isset($memFields['telegram_user_id']) ? 'telegram_user_id' : (isset($memFields['user_id']) ? 'user_id' : 'telegram_user_id');
+
+        $member = null;
+        try {
+            $member = Database::fetch("SELECT * FROM members WHERE {$userCol} = :uid", [':uid' => $userId]);
+        } catch (\Throwable) {}
 
         if ($member) {
             Database::execute(
@@ -957,20 +1034,38 @@ class MessageTrackingService
             $member['username'] = $username;
         } else {
             $now = utc_now();
+            $insCols = ['full_name', 'username', 'is_bot', 'created_at', 'updated_at'];
+            $insVals = [':fn', ':un', ':bot', ':created_at', ':updated_at'];
+            $params = [
+                ':fn' => $fullName,
+                ':un' => $username,
+                ':bot' => $isBot,
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ];
+
+            if (isset($memFields['telegram_user_id'])) {
+                $insCols[] = 'telegram_user_id';
+                $insVals[] = ':uid';
+                $params[':uid'] = $userId;
+            }
+            if (isset($memFields['user_id'])) {
+                $insCols[] = 'user_id';
+                $insVals[] = ':uid_legacy';
+                $params[':uid_legacy'] = $userId;
+            }
+
+            $colSql = '`' . implode('`, `', $insCols) . '`';
+            $valSql = implode(', ', $insVals);
+
             Database::execute(
-                "INSERT INTO members (telegram_user_id, full_name, username, is_bot, created_at, updated_at)
-                 VALUES (:uid, :fn, :un, :bot, :created_at, :updated_at)
+                "INSERT INTO members ({$colSql}) VALUES ({$valSql})
                  ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), username = VALUES(username), updated_at = VALUES(updated_at)",
-                [
-                    ':uid' => $userId,
-                    ':fn' => $fullName,
-                    ':un' => $username,
-                    ':bot' => $isBot,
-                    ':created_at' => $now,
-                    ':updated_at' => $now,
-                ]
+                $params
             );
-            $member = Database::fetch("SELECT * FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+            try {
+                $member = Database::fetch("SELECT * FROM members WHERE {$userCol} = :uid", [':uid' => $userId]);
+            } catch (\Throwable) {}
         }
 
         if (!$member) {
@@ -1096,7 +1191,8 @@ class MessageTrackingService
 
         // Author reacting to own message does not count as response
         $userId = (int)$user['id'];
-        if ((int)$tracked['telegram_user_id'] === $userId) {
+        $authorUserId = (int)($tracked['telegram_user_id'] ?? $tracked['user_id'] ?? 0);
+        if ($authorUserId === $userId) {
             return ['status' => 'ignored', 'reason' => 'author_reaction'];
         }
 

@@ -140,4 +140,192 @@ class Database
     {
         return self::getConnection()->inTransaction();
     }
+
+    private static bool $schemaEnsured = false;
+
+    /**
+     * Ensure all tables and required columns exist with the expected types.
+     * Auto-migrates and repairs schema differences transparently.
+     */
+    public static function ensureSchemaIntegrity(bool $force = false): array
+    {
+        if (self::$schemaEnsured && !$force) {
+            return ['status' => 'already_ensured'];
+        }
+        self::$schemaEnsured = true;
+
+        $log = [];
+        $pdo = self::getConnection();
+
+        // 1. group_authorized_senders
+        try {
+            $pdo->exec(self::prefixQuery("
+                CREATE TABLE IF NOT EXISTS group_authorized_senders (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    group_id INT NOT NULL,
+                    telegram_user_id BIGINT NOT NULL,
+                    full_name VARCHAR(255) NULL,
+                    username VARCHAR(100) NULL,
+                    notes VARCHAR(255) NULL,
+                    is_active TINYINT(1) NOT NULL DEFAULT 1,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    UNIQUE KEY uq_gas_group_user (group_id, telegram_user_id),
+                    KEY fk_gas_group (group_id),
+                    KEY idx_gas_user (telegram_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            "));
+            $log[] = 'group_authorized_senders table verified';
+        } catch (\Throwable $e) {
+            $log[] = 'group_authorized_senders err: ' . $e->getMessage();
+        }
+
+        // 2. tracked_messages table & columns
+        try {
+            $pdo->exec(self::prefixQuery("
+                CREATE TABLE IF NOT EXISTS tracked_messages (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    group_id INT NOT NULL,
+                    telegram_message_id BIGINT NOT NULL,
+                    telegram_user_id BIGINT NOT NULL DEFAULT 0,
+                    thread_id BIGINT DEFAULT NULL,
+                    reference_code VARCHAR(64) NULL,
+                    message_text TEXT NOT NULL,
+                    message_date DATETIME NOT NULL,
+                    deadline_at DATETIME NULL,
+                    edited_at DATETIME NULL,
+                    tracking_source ENUM('hashtag','command','dashboard','auto') NOT NULL DEFAULT 'auto',
+                    is_active TINYINT(1) NOT NULL DEFAULT 1,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    UNIQUE KEY uq_group_message (group_id, telegram_message_id),
+                    KEY idx_tm_date (message_date),
+                    KEY idx_tm_group (group_id),
+                    KEY idx_tm_ref (reference_code)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            "));
+
+            $rows = $pdo->query(self::prefixQuery("SHOW COLUMNS FROM tracked_messages"))->fetchAll(\PDO::FETCH_ASSOC);
+            $tmCols = [];
+            foreach ($rows as $r) {
+                $tmCols[strtolower($r['Field'])] = $r;
+            }
+
+            // Check telegram_user_id
+            if (!isset($tmCols['telegram_user_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN telegram_user_id BIGINT NOT NULL DEFAULT 0 AFTER telegram_message_id"));
+                $log[] = 'Added telegram_user_id to tracked_messages';
+                if (isset($tmCols['user_id'])) {
+                    $pdo->exec(self::prefixQuery("UPDATE tracked_messages SET telegram_user_id = user_id WHERE telegram_user_id = 0"));
+                    $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages MODIFY COLUMN user_id BIGINT NULL DEFAULT NULL"));
+                    $log[] = 'Migrated user_id to telegram_user_id in tracked_messages';
+                } elseif (isset($tmCols['sender_id'])) {
+                    $pdo->exec(self::prefixQuery("UPDATE tracked_messages SET telegram_user_id = sender_id WHERE telegram_user_id = 0"));
+                    $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages MODIFY COLUMN sender_id BIGINT NULL DEFAULT NULL"));
+                    $log[] = 'Migrated sender_id to telegram_user_id in tracked_messages';
+                }
+            }
+
+            // Check deadline_at
+            if (!isset($tmCols['deadline_at'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN deadline_at DATETIME NULL AFTER message_date"));
+                $log[] = 'Added deadline_at to tracked_messages';
+            }
+
+            // Check tracking_source ENUM
+            if (isset($tmCols['tracking_source'])) {
+                $type = strtolower($tmCols['tracking_source']['Type'] ?? '');
+                if (!str_contains($type, "'auto'")) {
+                    $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages MODIFY COLUMN tracking_source ENUM('hashtag', 'command', 'dashboard', 'auto') NOT NULL DEFAULT 'auto'"));
+                    $log[] = 'Updated tracking_source ENUM to include auto';
+                }
+            }
+        } catch (\Throwable $e) {
+            $log[] = 'tracked_messages repair err: ' . $e->getMessage();
+        }
+
+        // 3. message_responses table & columns
+        try {
+            $rows = $pdo->query(self::prefixQuery("SHOW COLUMNS FROM message_responses"))->fetchAll(\PDO::FETCH_ASSOC);
+            $mrCols = [];
+            foreach ($rows as $r) {
+                $mrCols[strtolower($r['Field'])] = $r;
+            }
+
+            if (!isset($mrCols['member_telegram_user_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN member_telegram_user_id BIGINT NOT NULL DEFAULT 0 AFTER member_id"));
+                $log[] = 'Added member_telegram_user_id to message_responses';
+            }
+            if (!isset($mrCols['reviewed_at'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN reviewed_at DATETIME NULL AFTER reviewed_by_admin_id"));
+                $log[] = 'Added reviewed_at to message_responses';
+            }
+            if (!isset($mrCols['excluded_reason'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN excluded_reason TEXT NULL AFTER matching_method"));
+                $log[] = 'Added excluded_reason to message_responses';
+            }
+            if (isset($mrCols['status'])) {
+                $type = strtolower($mrCols['status']['Type'] ?? '');
+                if (!str_contains($type, "'excluded'")) {
+                    $pdo->exec(self::prefixQuery("ALTER TABLE message_responses MODIFY COLUMN status ENUM('replied', 'pending_review', 'rejected', 'unknown', 'excluded') NOT NULL DEFAULT 'unknown'"));
+                    $log[] = 'Updated status ENUM in message_responses';
+                }
+            }
+        } catch (\Throwable $e) {
+            $log[] = 'message_responses repair err: ' . $e->getMessage();
+        }
+
+        // 4. members table & columns
+        try {
+            $rows = $pdo->query(self::prefixQuery("SHOW COLUMNS FROM members"))->fetchAll(\PDO::FETCH_ASSOC);
+            $memCols = [];
+            foreach ($rows as $r) {
+                $memCols[strtolower($r['Field'])] = $r;
+            }
+
+            if (!isset($memCols['telegram_user_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE members ADD COLUMN telegram_user_id BIGINT NOT NULL DEFAULT 0 AFTER id"));
+                $log[] = 'Added telegram_user_id to members';
+                if (isset($memCols['user_id'])) {
+                    $pdo->exec(self::prefixQuery("UPDATE members SET telegram_user_id = user_id WHERE telegram_user_id = 0"));
+                    $pdo->exec(self::prefixQuery("ALTER TABLE members MODIFY COLUMN user_id BIGINT NULL DEFAULT NULL"));
+                }
+            }
+        } catch (\Throwable $e) {
+            $log[] = 'members repair err: ' . $e->getMessage();
+        }
+
+        // 5. telegram_groups table & columns
+        try {
+            $rows = $pdo->query(self::prefixQuery("SHOW COLUMNS FROM telegram_groups"))->fetchAll(\PDO::FETCH_ASSOC);
+            $grpCols = [];
+            foreach ($rows as $r) {
+                $grpCols[strtolower($r['Field'])] = $r;
+            }
+
+            if (!isset($grpCols['last_update_at'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE telegram_groups ADD COLUMN last_update_at DATETIME NULL AFTER last_health_check_at"));
+                $log[] = 'Added last_update_at to telegram_groups';
+            }
+            if (!isset($grpCols['previous_chat_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE telegram_groups ADD COLUMN previous_chat_id BIGINT NULL AFTER last_update_at"));
+                $log[] = 'Added previous_chat_id to telegram_groups';
+            }
+        } catch (\Throwable $e) {
+            $log[] = 'telegram_groups repair err: ' . $e->getMessage();
+        }
+
+        // 6. Seed system settings defaults
+        try {
+            $pdo->exec(self::prefixQuery("
+                INSERT IGNORE INTO system_settings (setting_key, setting_value, updated_at) VALUES 
+                ('telegram_tracking_mode', 'all_authorized', UTC_TIMESTAMP()),
+                ('telegram_track_all_messages', '1', UTC_TIMESTAMP()),
+                ('telegram_track_hashtag', '#track', UTC_TIMESTAMP()),
+                ('telegram_track_command', '/track', UTC_TIMESTAMP())
+            "));
+        } catch (\Throwable) {}
+
+        return ['status' => 'ensured', 'log' => $log];
+    }
 }

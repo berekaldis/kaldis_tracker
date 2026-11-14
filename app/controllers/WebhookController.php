@@ -7,6 +7,25 @@ class WebhookController
 {
     public function handle(): void
     {
+        // 0. Diagnostic schema inspection and auto-repair endpoint
+        if (isset($_GET['schema_check']) && $_GET['schema_check'] === 'kaldis2026') {
+            header('Content-Type: application/json');
+            $repairLog = \App\Services\Database::ensureSchemaIntegrity(true);
+            $trackedCols = \App\Services\Database::fetchAll("SHOW COLUMNS FROM tracked_messages");
+            $memberCols = \App\Services\Database::fetchAll("SHOW COLUMNS FROM members");
+            $responseCols = \App\Services\Database::fetchAll("SHOW COLUMNS FROM message_responses");
+            $senderCols = \App\Services\Database::fetchAll("SHOW COLUMNS FROM group_authorized_senders");
+            echo json_encode([
+                'ok' => true,
+                'repair' => $repairLog,
+                'tracked_messages_columns' => array_column($trackedCols, 'Field'),
+                'members_columns' => array_column($memberCols, 'Field'),
+                'message_responses_columns' => array_column($responseCols, 'Field'),
+                'group_authorized_senders_columns' => array_column($senderCols, 'Field'),
+            ], JSON_PRETTY_PRINT);
+            exit;
+        }
+
         // 1. Validate X-Telegram-Bot-Api-Secret-Token header
         $receivedSecret = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] 
             ?? $_SERVER['REDIRECT_HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] 
@@ -70,6 +89,7 @@ class WebhookController
 
         // 3. Process update via MessageTrackingService
         try {
+            \App\Services\Database::ensureSchemaIntegrity();
             $service = new MessageTrackingService();
             $result = $service->processUpdate($payload);
 
