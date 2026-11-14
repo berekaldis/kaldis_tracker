@@ -63,22 +63,31 @@ $roleBadgeClass = match($user['role'] ?? '') {
     </div>
 
     <!-- Navigation Menu Items -->
+    <?php
+    $isMessagesActive = (str_contains($currentUri, 'messages') || str_contains($currentUri, 'tracked-messages')) && !str_contains($currentUri, 'messages/create');
+    $isGroupsActive = str_contains($currentUri, 'groups');
+    $isSettingsBotActive = str_contains($currentUri, 'settings/bot');
+    $isSettingsAdminsActive = str_contains($currentUri, 'settings/admins');
+    $isAuditActive = str_contains($currentUri, 'audit');
+    $isAboutActive = str_contains($currentUri, 'about');
+    $isDashboardActive = str_contains($currentUri, 'dashboard') || (!$isMessagesActive && !$isGroupsActive && !$isSettingsBotActive && !$isSettingsAdminsActive && !$isAuditActive && !$isAboutActive);
+    ?>
     <nav class="sidebar-nav custom-scrollbar">
         <ul class="nav flex-column mb-3">
             <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'dashboard') && !str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard') ?>">
+                <a class="nav-link <?= $isDashboardActive ? 'active' : '' ?>" href="<?= url('dashboard') ?>">
                     <i class="bi bi-speedometer2"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= (str_contains($currentUri, 'messages') || str_contains($currentUri, 'tracked-messages')) && !str_contains($currentUri, 'messages/create') ? 'active' : '' ?>" href="<?= url('messages') ?>">
+                <a class="nav-link <?= $isMessagesActive ? 'active' : '' ?>" href="<?= url('messages') ?>">
                     <i class="bi bi-chat-quote-fill"></i>
                     <span>Tracked Group Messages</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'groups') ? 'active' : '' ?>" href="<?= url('groups') ?>">
+                <a class="nav-link <?= $isGroupsActive ? 'active' : '' ?>" href="<?= url('groups') ?>">
                     <i class="bi bi-people-fill"></i>
                     <span>Telegram Groups</span>
                 </a>
@@ -86,13 +95,13 @@ $roleBadgeClass = match($user['role'] ?? '') {
 
             <?php if ($isSuperAdmin): ?>
                 <li class="nav-item">
-                    <a class="nav-link <?= str_contains($currentUri, 'settings/bot') ? 'active' : '' ?>" href="<?= url('settings/bot') ?>">
+                    <a class="nav-link <?= $isSettingsBotActive ? 'active' : '' ?>" href="<?= url('settings/bot') ?>">
                         <i class="bi bi-robot"></i>
                         <span>Bot Setup</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= str_contains($currentUri, 'settings/admins') ? 'active' : '' ?>" href="<?= url('settings/admins') ?>">
+                    <a class="nav-link <?= $isSettingsAdminsActive ? 'active' : '' ?>" href="<?= url('settings/admins') ?>">
                         <i class="bi bi-person-gear"></i>
                         <span>Users &amp; Access</span>
                     </a>
@@ -101,7 +110,7 @@ $roleBadgeClass = match($user['role'] ?? '') {
 
             <?php if ($isOwner): ?>
                 <li class="nav-item">
-                    <a class="nav-link <?= str_contains($currentUri, 'audit') ? 'active' : '' ?>" href="<?= url('audit') ?>">
+                    <a class="nav-link <?= $isAuditActive ? 'active' : '' ?>" href="<?= url('audit') ?>">
                         <i class="bi bi-shield-check"></i>
                         <span>Audit Logs</span>
                     </a>
@@ -109,7 +118,7 @@ $roleBadgeClass = match($user['role'] ?? '') {
             <?php endif; ?>
 
             <li class="nav-item">
-                <a class="nav-link <?= str_contains($currentUri, 'about') ? 'active' : '' ?>" href="<?= url('dashboard/about') ?>">
+                <a class="nav-link <?= $isAboutActive ? 'active' : '' ?>" href="<?= url('dashboard/about') ?>">
                     <i class="bi bi-info-circle-fill"></i>
                     <span>About &amp; Help</span>
                 </a>

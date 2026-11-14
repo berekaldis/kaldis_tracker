@@ -12,143 +12,198 @@ class DashboardController
     {
         AuthService::requireLogin();
 
-        // Retrieve and sanitize filters
-        $search = trim($_GET['search'] ?? '');
-        $groupId = !empty($_GET['group_id']) ? (int)$_GET['group_id'] : null;
-        $dateFrom = trim($_GET['date_from'] ?? '');
-        $dateTo = trim($_GET['date_to'] ?? '');
-        $page = max(1, (int)($_GET['page'] ?? 1));
-        $perPage = 15;
-        $offset = ($page - 1) * $perPage;
-
-        // Build filter WHERE clauses
-        $whereClauses = ["tm.is_active = 1"];
-        $params = [];
-
-        if (!empty($search)) {
-            $whereClauses[] = "(tm.message_text LIKE :search OR tm.reference_code LIKE :search)";
-            $params[':search'] = '%' . $search . '%';
-        }
-
-        if (!empty($groupId)) {
-            $whereClauses[] = "tm.group_id = :gid";
-            $params[':gid'] = $groupId;
-        }
-
-        $appTz = new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'));
-        $utcTz = new DateTimeZone('UTC');
-
-        if (!empty($dateFrom)) {
-            try {
-                $dtFrom = new DateTimeImmutable($dateFrom . ' 00:00:00', $appTz);
-                $whereClauses[] = "tm.message_date >= :date_from";
-                $params[':date_from'] = $dtFrom->setTimezone($utcTz)->format('Y-m-d H:i:s');
-            } catch (\Exception) {}
-        }
-
-        if (!empty($dateTo)) {
-            try {
-                $dtTo = new DateTimeImmutable($dateTo . ' 23:59:59', $appTz);
-                $whereClauses[] = "tm.message_date <= :date_to";
-                $params[':date_to'] = $dtTo->setTimezone($utcTz)->format('Y-m-d H:i:s');
-            } catch (\Exception) {}
-        }
-
-        // Department and Group scoping and filtering
         $assignedGroup = AuthService::assignedGroupId();
         $userDept = AuthService::userDepartment();
-        $selectedDepartment = null;
+        $isGroupAuthorizer = AuthService::isGroupAuthorizer();
 
+        // 1. Group / Department Scoping
+        $groupParams = [];
+        $groupWhere = "WHERE is_active = 1";
         if ($assignedGroup !== null) {
-            // Strict Group Isolation: User can ONLY see their assigned group's conversations
-            $whereClauses[] = "tm.group_id = :assigned_gid";
-            $params[':assigned_gid'] = $assignedGroup;
-
-            $groups = Database::fetchAll(
-                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE id = :agid",
-                [':agid' => $assignedGroup]
-            );
-            $selectedDepartment = $groups[0]['department'] ?? null;
-            $departments = $selectedDepartment ? [$selectedDepartment] : [];
+            $groupWhere .= " AND id = :agid";
+            $groupParams[':agid'] = $assignedGroup;
         } elseif ($userDept !== null) {
-            // Strict Department Isolation: User can ONLY see their assigned department
-            $whereClauses[] = "tg.department = :user_dept";
-            $params[':user_dept'] = $userDept;
-            $selectedDepartment = $userDept;
-
-            $groups = Database::fetchAll(
-                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE department = :ud ORDER BY title ASC",
-                [':ud' => $userDept]
-            );
-            $departments = [$userDept];
-        } else {
-            // Company-wide / Super Admin: can view all or filter by department
-            $reqDept = trim($_GET['department'] ?? '');
-            if (!empty($reqDept)) {
-                $whereClauses[] = "tg.department = :req_dept";
-                $params[':req_dept'] = $reqDept;
-                $selectedDepartment = $reqDept;
-            }
-
-            $groups = Database::fetchAll("SELECT id, title, telegram_chat_id, department FROM telegram_groups ORDER BY title ASC");
-            $deptRows = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != '' ORDER BY department ASC");
-            $departments = array_column($deptRows, 'department');
+            $groupWhere .= " AND department = :udept";
+            $groupParams[':udept'] = $userDept;
         }
 
-        $whereSql = implode(' AND ', $whereClauses);
-
-        // Count total filtered messages
-        $totalMessagesCount = (int)Database::fetchColumn(
-            "SELECT COUNT(*) FROM tracked_messages tm JOIN telegram_groups tg ON tm.group_id = tg.id WHERE {$whereSql}",
-            $params
+        $groups = Database::fetchAll(
+            "SELECT id, telegram_chat_id, title, department, bot_status, bot_is_admin, last_update_at 
+             FROM telegram_groups {$groupWhere} 
+             ORDER BY title ASC",
+            $groupParams
         );
 
-        // Fetch paginated messages with group title
-        $messagesSql = "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id 
-                        FROM tracked_messages tm
-                        JOIN telegram_groups tg ON tm.group_id = tg.id
-                        WHERE {$whereSql}
-                        ORDER BY tm.message_date DESC
-                        LIMIT {$perPage} OFFSET {$offset}";
+        $accessibleGroupIds = array_column($groups, 'id');
 
-        $trackedMessages = Database::fetchAll($messagesSql, $params);
-
-        // Calculate member response stats for each message
-        $messagesWithRepliesCount = 0;
-        $messagesWithoutRepliesCount = 0;
-        $totalPendingMembersCount = 0;
-
-        $messageStats = [];
-        foreach ($trackedMessages as &$msg) {
-            $stats = $this->calculateMessageStats((int)$msg['id'], (int)$msg['group_id'], $msg['message_date']);
-            $msg['stats'] = $stats;
-            $messageStats[$msg['id']] = $stats;
+        // If user has no accessible groups
+        if (empty($accessibleGroupIds)) {
+            view('dashboard.index', [
+                'kpis' => [
+                    'total_groups' => 0,
+                    'total_members' => 0,
+                    'total_messages' => 0,
+                    'overall_compliance_rate' => 0,
+                    'pending_staff' => 0,
+                    'overdue_count' => 0,
+                ],
+                'groups' => [],
+                'groupPerformance' => [],
+                'departmentStats' => [],
+                'recentMessages' => [],
+                'userDept' => $userDept,
+                'assignedGroupId' => $assignedGroup,
+                'isGroupAuthorizer' => $isGroupAuthorizer,
+                'canTrack' => AuthService::canTrack(),
+            ]);
+            return;
         }
-        unset($msg);
 
-        // For summary cards respecting active filters across ALL matching messages:
-        $summaryCardStats = $this->calculateFilteredSummaryStats($whereSql, $params);
+        $inGroupPlaceholders = implode(',', array_fill(0, count($accessibleGroupIds), '?'));
 
-        $totalPages = ceil($totalMessagesCount / $perPage);
+        // 2. Total active members across accessible groups
+        $totalMembers = (int)Database::fetchColumn(
+            "SELECT COUNT(DISTINCT member_id) FROM group_members WHERE group_id IN ({$inGroupPlaceholders}) AND is_active = 1",
+            $accessibleGroupIds
+        );
+
+        // 3. Tracked messages across accessible groups
+        $allMessages = Database::fetchAll(
+            "SELECT tm.id, tm.group_id, tm.message_date, tm.deadline_at 
+             FROM tracked_messages tm 
+             WHERE tm.group_id IN ({$inGroupPlaceholders}) AND tm.is_active = 1 
+             ORDER BY tm.message_date DESC",
+            $accessibleGroupIds
+        );
+
+        $totalMessages = count($allMessages);
+        $totalReplies = 0;
+        $totalEligible = 0;
+        $totalPending = 0;
+        $overdueCount = 0;
+
+        // Group-level aggregation
+        $groupStatsMap = [];
+        foreach ($accessibleGroupIds as $gid) {
+            $groupStatsMap[$gid] = [
+                'message_count' => 0,
+                'total_replies' => 0,
+                'total_eligible' => 0,
+                'pending' => 0,
+                'overdue' => 0,
+            ];
+        }
+
+        foreach ($allMessages as $msg) {
+            $st = $this->calculateMessageStats((int)$msg['id'], (int)$msg['group_id'], $msg['message_date']);
+            $totalReplies += $st['replied'];
+            $totalEligible += $st['eligible'];
+            $totalPending += $st['not_replied'];
+            if (!empty($st['is_overdue'])) {
+                $overdueCount++;
+            }
+
+            $gid = (int)$msg['group_id'];
+            if (isset($groupStatsMap[$gid])) {
+                $groupStatsMap[$gid]['message_count']++;
+                $groupStatsMap[$gid]['total_replies'] += $st['replied'];
+                $groupStatsMap[$gid]['total_eligible'] += $st['eligible'];
+                $groupStatsMap[$gid]['pending'] += $st['not_replied'];
+                if (!empty($st['is_overdue'])) {
+                    $groupStatsMap[$gid]['overdue']++;
+                }
+            }
+        }
+
+        $overallComplianceRate = ($totalEligible > 0) ? round(($totalReplies / $totalEligible) * 100, 1) : 0;
+
+        // 4. Build Group Performance Matrix
+        $groupPerformance = [];
+        $deptAggregation = [];
+
+        foreach ($groups as $g) {
+            $gid = (int)$g['id'];
+            $rosterCount = (int)Database::fetchColumn(
+                "SELECT COUNT(*) FROM group_members WHERE group_id = :gid AND is_active = 1",
+                [':gid' => $gid]
+            );
+
+            $gStats = $groupStatsMap[$gid] ?? ['message_count' => 0, 'total_replies' => 0, 'total_eligible' => 0, 'pending' => 0, 'overdue' => 0];
+            $gRate = ($gStats['total_eligible'] > 0) ? round(($gStats['total_replies'] / $gStats['total_eligible']) * 100, 1) : 0;
+
+            $groupPerformance[] = [
+                'id' => $gid,
+                'title' => $g['title'],
+                'telegram_chat_id' => $g['telegram_chat_id'],
+                'department' => $g['department'] ?? 'General',
+                'bot_status' => $g['bot_status'],
+                'bot_is_admin' => $g['bot_is_admin'],
+                'roster_count' => $rosterCount,
+                'message_count' => $gStats['message_count'],
+                'compliance_rate' => $gRate,
+                'pending_count' => $gStats['pending'],
+                'overdue_count' => $gStats['overdue'],
+                'last_update_at' => $g['last_update_at'],
+            ];
+
+            // Department aggregation
+            $deptName = $g['department'] ?: 'General';
+            if (!isset($deptAggregation[$deptName])) {
+                $deptAggregation[$deptName] = [
+                    'department' => $deptName,
+                    'group_count' => 0,
+                    'member_count' => 0,
+                    'message_count' => 0,
+                    'total_replies' => 0,
+                    'total_eligible' => 0,
+                ];
+            }
+            $deptAggregation[$deptName]['group_count']++;
+            $deptAggregation[$deptName]['member_count'] += $rosterCount;
+            $deptAggregation[$deptName]['message_count'] += $gStats['message_count'];
+            $deptAggregation[$deptName]['total_replies'] += $gStats['total_replies'];
+            $deptAggregation[$deptName]['total_eligible'] += $gStats['total_eligible'];
+        }
+
+        foreach ($deptAggregation as &$d) {
+            $d['compliance_rate'] = ($d['total_eligible'] > 0) ? round(($d['total_replies'] / $d['total_eligible']) * 100, 1) : 0;
+        }
+        unset($d);
+
+        // 5. Recent Announcements (Latest 5)
+        $recentMessagesRaw = Database::fetchAll(
+            "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id, tg.department 
+             FROM tracked_messages tm 
+             JOIN telegram_groups tg ON tm.group_id = tg.id 
+             WHERE tm.group_id IN ({$inGroupPlaceholders}) AND tm.is_active = 1 
+             ORDER BY tm.message_date DESC 
+             LIMIT 5",
+            $accessibleGroupIds
+        );
+
+        $recentMessages = [];
+        foreach ($recentMessagesRaw as $rm) {
+            $rm['stats'] = $this->calculateMessageStats((int)$rm['id'], (int)$rm['group_id'], $rm['message_date']);
+            $recentMessages[] = $rm;
+        }
 
         view('dashboard.index', [
-            'messages' => $trackedMessages,
+            'kpis' => [
+                'total_groups' => count($groups),
+                'total_members' => $totalMembers,
+                'total_messages' => $totalMessages,
+                'overall_compliance_rate' => $overallComplianceRate,
+                'pending_staff' => $totalPending,
+                'overdue_count' => $overdueCount,
+            ],
             'groups' => $groups,
-            'summary' => $summaryCardStats,
-            'trackingMode' => (string)config('telegram.tracking_mode', 'all_authorized'),
+            'groupPerformance' => $groupPerformance,
+            'departmentStats' => array_values($deptAggregation),
+            'recentMessages' => $recentMessages,
             'userDept' => $userDept,
-            'selectedDepartment' => $selectedDepartment,
-            'departments' => $departments,
-            'filters' => [
-                'search' => $search,
-                'group_id' => $groupId,
-                'department' => $selectedDepartment,
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
-                'page' => $page,
-                'total_pages' => $totalPages,
-                'total_records' => $totalMessagesCount,
-            ]
+            'assignedGroupId' => $assignedGroup,
+            'isGroupAuthorizer' => $isGroupAuthorizer,
+            'canTrack' => AuthService::canTrack(),
         ]);
     }
 
@@ -272,7 +327,7 @@ class DashboardController
     /**
      * Compute aggregated summary cards respecting active filters.
      */
-    private function calculateFilteredSummaryStats(string $whereSql, array $params): array
+    public function calculateFilteredSummaryStats(string $whereSql, array $params): array
     {
         $sql = "SELECT tm.id, tm.group_id, tm.message_date 
                 FROM tracked_messages tm 
@@ -288,12 +343,14 @@ class DashboardController
                 'messages_with_replies' => 0,
                 'messages_without_replies' => 0,
                 'total_pending_members' => 0,
+                'overdue_messages' => 0,
             ];
         }
 
         $withReplies = 0;
         $withoutReplies = 0;
         $totalPendingMembers = 0;
+        $overdueMessages = 0;
 
         foreach ($messages as $msg) {
             $stats = $this->calculateMessageStats((int)$msg['id'], (int)$msg['group_id'], $msg['message_date']);
@@ -303,6 +360,9 @@ class DashboardController
                 $withoutReplies++;
             }
             $totalPendingMembers += $stats['not_replied'];
+            if (!empty($stats['is_overdue'])) {
+                $overdueMessages++;
+            }
         }
 
         return [
@@ -310,6 +370,7 @@ class DashboardController
             'messages_with_replies' => $withReplies,
             'messages_without_replies' => $withoutReplies,
             'total_pending_members' => $totalPendingMembers,
+            'overdue_messages' => $overdueMessages,
         ];
     }
 

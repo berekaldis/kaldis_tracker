@@ -15,7 +15,150 @@ class TrackedMessageController
      */
     public function index(): void
     {
-        (new DashboardController())->index();
+        AuthService::requireLogin();
+
+        $search = trim($_GET['search'] ?? '');
+        $groupId = !empty($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+        $dateFrom = trim($_GET['date_from'] ?? '');
+        $dateTo = trim($_GET['date_to'] ?? '');
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+
+        $whereClauses = ["tm.is_active = 1"];
+        $params = [];
+
+        // Search filter (text or #reference_code)
+        if (!empty($search)) {
+            $whereClauses[] = "(tm.message_text LIKE :search OR tm.reference_code LIKE :search)";
+            $params[':search'] = '%' . $search . '%';
+        }
+
+        // Group filter
+        if (!empty($groupId)) {
+            $whereClauses[] = "tm.group_id = :gid";
+            $params[':gid'] = $groupId;
+        }
+
+        // Date range filter (EAT inputs converted to UTC database timestamps)
+        $appTz = new DateTimeZone(config('app.timezone', 'Africa/Addis_Ababa'));
+        $utcTz = new DateTimeZone('UTC');
+
+        if (!empty($dateFrom)) {
+            try {
+                $dtFrom = new DateTimeImmutable($dateFrom . ' 00:00:00', $appTz);
+                $whereClauses[] = "tm.message_date >= :date_from";
+                $params[':date_from'] = $dtFrom->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
+        if (!empty($dateTo)) {
+            try {
+                $dtTo = new DateTimeImmutable($dateTo . ' 23:59:59', $appTz);
+                $whereClauses[] = "tm.message_date <= :date_to";
+                $params[':date_to'] = $dtTo->setTimezone($utcTz)->format('Y-m-d H:i:s');
+            } catch (\Exception) {}
+        }
+
+        // Department and Group scoping and filtering
+        $assignedGroup = AuthService::assignedGroupId();
+        $userDept = AuthService::userDepartment();
+        $isGroupAuthorizer = AuthService::isGroupAuthorizer();
+        $selectedDepartment = null;
+
+        if ($assignedGroup !== null) {
+            // Strict Group Isolation: User can ONLY see their assigned group's conversations
+            $whereClauses[] = "tm.group_id = :assigned_gid";
+            $params[':assigned_gid'] = $assignedGroup;
+
+            $groups = Database::fetchAll(
+                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE id = :agid AND is_active = 1",
+                [':agid' => $assignedGroup]
+            );
+            $selectedDepartment = $groups[0]['department'] ?? null;
+            $departments = $selectedDepartment ? [$selectedDepartment] : [];
+        } elseif ($userDept !== null) {
+            // Strict Department Isolation: User can ONLY see their assigned department
+            $whereClauses[] = "tg.department = :user_dept";
+            $params[':user_dept'] = $userDept;
+            $selectedDepartment = $userDept;
+
+            $groups = Database::fetchAll(
+                "SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE department = :ud AND is_active = 1 ORDER BY title ASC",
+                [':ud' => $userDept]
+            );
+            $departments = [$userDept];
+        } else {
+            // Company-wide / Super Admin: can view all or filter by department
+            $reqDept = trim($_GET['department'] ?? '');
+            if (!empty($reqDept)) {
+                $whereClauses[] = "tg.department = :req_dept";
+                $params[':req_dept'] = $reqDept;
+                $selectedDepartment = $reqDept;
+            }
+
+            $groups = Database::fetchAll("SELECT id, title, telegram_chat_id, department FROM telegram_groups WHERE is_active = 1 ORDER BY title ASC");
+            $deptRows = Database::fetchAll("SELECT DISTINCT department FROM telegram_groups WHERE department IS NOT NULL AND department != '' AND is_active = 1 ORDER BY department ASC");
+            $departments = array_column($deptRows, 'department');
+        }
+
+        $whereSql = implode(' AND ', $whereClauses);
+
+        // Count total filtered messages
+        $totalMessagesCount = (int)Database::fetchColumn(
+            "SELECT COUNT(*) FROM tracked_messages tm JOIN telegram_groups tg ON tm.group_id = tg.id WHERE {$whereSql}",
+            $params
+        );
+
+        $totalPages = max(1, (int)ceil($totalMessagesCount / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+            $offset = ($page - 1) * $perPage;
+        }
+
+        // Summary cards stats based on filtered selection
+        $dashboardCtrl = new DashboardController();
+        $summaryCardStats = $dashboardCtrl->calculateFilteredSummaryStats($whereSql, $params);
+
+        // Fetch paginated messages
+        $messages = Database::fetchAll(
+            "SELECT tm.*, tg.title AS group_title, tg.telegram_chat_id, tg.department 
+             FROM tracked_messages tm 
+             JOIN telegram_groups tg ON tm.group_id = tg.id 
+             WHERE {$whereSql} 
+             ORDER BY tm.message_date DESC 
+             LIMIT {$perPage} OFFSET {$offset}",
+            $params
+        );
+
+        // Calculate stats for each message
+        foreach ($messages as &$msg) {
+            $msg['stats'] = $dashboardCtrl->calculateMessageStats((int)$msg['id'], (int)$msg['group_id'], $msg['message_date']);
+        }
+        unset($msg);
+
+        view('messages.index', [
+            'messages' => $messages,
+            'groups' => $groups,
+            'summary' => $summaryCardStats,
+            'trackingMode' => (string)config('telegram.tracking_mode', 'all_authorized'),
+            'userDept' => $userDept,
+            'selectedDepartment' => $selectedDepartment,
+            'departments' => $departments,
+            'assignedGroupId' => $assignedGroup,
+            'isGroupAuthorizer' => $isGroupAuthorizer,
+            'canTrack' => AuthService::canTrack(),
+            'filters' => [
+                'search' => $search,
+                'group_id' => $groupId,
+                'department' => $selectedDepartment,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'page' => $page,
+                'total_pages' => $totalPages,
+                'total_records' => $totalMessagesCount,
+            ]
+        ]);
     }
 
     /**
