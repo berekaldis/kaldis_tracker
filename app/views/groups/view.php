@@ -54,6 +54,11 @@ $isOwner = AuthService::isOwner();
             </button>
         <?php endif; ?>
 
+        <!-- Authorized Senders Link -->
+        <a href="<?= url('senders?group_id=' . $group['id']) ?>" class="btn btn-outline-dark btn-sm shadow-sm" title="View &amp; Edit Authorized Senders for this Group">
+            <i class="bi bi-person-check me-1"></i> Authorized Senders
+        </a>
+
         <span class="badge rounded-pill bg-<?= $group['is_active'] ? 'success-subtle text-success border border-success-subtle' : 'secondary-subtle text-secondary' ?> px-3 py-1.5 fw-semibold">
             <?= $group['is_active'] ? 'Active' : 'Paused' ?>
         </span>

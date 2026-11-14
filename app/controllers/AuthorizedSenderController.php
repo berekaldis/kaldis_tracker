@@ -181,6 +181,112 @@ class AuthorizedSenderController
     }
 
     /**
+     * Update an existing Authorized Sender.
+     */
+    public function update(): void
+    {
+        AuthService::requireCanTrack();
+        AuthService::verifyCsrf();
+
+        $senderId = (int)($_POST['sender_id'] ?? 0);
+        $sender = Database::fetch("SELECT * FROM group_authorized_senders WHERE id = :id", [':id' => $senderId]);
+
+        if (!$sender) {
+            flash('danger', 'Authorized sender record not found.');
+            redirect(url('senders'));
+        }
+
+        // Verify access to current group
+        AuthService::requireGroupAccess((int)$sender['group_id']);
+
+        $targetGroupId = !empty($_POST['group_id']) ? (int)$_POST['group_id'] : (int)$sender['group_id'];
+        if ($targetGroupId !== (int)$sender['group_id']) {
+            AuthService::requireGroupAccess($targetGroupId);
+        }
+
+        $telegramUserId = trim($_POST['telegram_user_id'] ?? '');
+        $fullName = trim($_POST['full_name'] ?? '');
+        $username = trim($_POST['username'] ?? '');
+        $notes = trim($_POST['notes'] ?? '');
+        $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : (int)$sender['is_active'];
+
+        $numericUserId = (int)preg_replace('/[^0-9]/', '', $telegramUserId);
+        $cleanUsername = ltrim($username, '@');
+
+        if (!$numericUserId) {
+            flash('danger', 'Invalid numeric Telegram User ID.');
+            redirect(url('senders?group_id=' . $sender['group_id']));
+        }
+
+        if (empty($fullName)) {
+            $existing = Database::fetch(
+                "SELECT full_name, username FROM members WHERE telegram_user_id = :uid",
+                [':uid' => $numericUserId]
+            );
+            if ($existing && !empty($existing['full_name'])) {
+                $fullName = $existing['full_name'];
+                if (empty($cleanUsername) && !empty($existing['username'])) {
+                    $cleanUsername = $existing['username'];
+                }
+            } else {
+                $fullName = 'Authorized Sender #' . $numericUserId;
+            }
+        }
+
+        // Duplicate check if group or user ID changed
+        if ($targetGroupId !== (int)$sender['group_id'] || $numericUserId !== (int)$sender['telegram_user_id']) {
+            $duplicate = Database::fetch(
+                "SELECT id FROM group_authorized_senders WHERE group_id = :gid AND telegram_user_id = :uid AND id != :id",
+                [':gid' => $targetGroupId, ':uid' => $numericUserId, ':id' => $senderId]
+            );
+            if ($duplicate) {
+                flash('danger', 'This user is already registered as an authorized sender in that group.');
+                redirect(url('senders?group_id=' . $sender['group_id']));
+            }
+        }
+
+        $now = utc_now();
+
+        try {
+            Database::execute(
+                "UPDATE group_authorized_senders 
+                 SET group_id = :gid,
+                     telegram_user_id = :uid,
+                     full_name = :name,
+                     username = :uname,
+                     notes = :notes,
+                     is_active = :active,
+                     updated_at = :now
+                 WHERE id = :id",
+                [
+                    ':gid' => $targetGroupId,
+                    ':uid' => $numericUserId,
+                    ':name' => $fullName,
+                    ':uname' => $cleanUsername ?: null,
+                    ':notes' => $notes ?: null,
+                    ':active' => $isActive,
+                    ':now' => $now,
+                    ':id' => $senderId,
+                ]
+            );
+
+            AuditService::log('authorized_sender_updated', 'group_authorized_sender', (string)$senderId, [
+                'previous_group_id' => $sender['group_id'],
+                'new_group_id' => $targetGroupId,
+                'previous_user_id' => $sender['telegram_user_id'],
+                'new_user_id' => $numericUserId,
+                'full_name' => $fullName,
+            ]);
+
+            flash('success', "Authorized sender '{$fullName}' updated successfully!");
+        } catch (\Throwable $e) {
+            flash('danger', 'Failed to update authorized sender: ' . $e->getMessage());
+        }
+
+        redirect(url('senders?group_id=' . $targetGroupId));
+    }
+
+    /**
      * Toggle active / disabled status of an authorized sender.
      */
     public function toggle(): void

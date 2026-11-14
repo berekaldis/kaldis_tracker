@@ -188,6 +188,23 @@ $canTrack = AuthService::canTrack();
                             <td class="text-end">
                                 <?php if ($canTrack): ?>
                                     <div class="d-inline-flex gap-1">
+                                        <!-- Edit Sender -->
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-primary px-2 py-0 btn-edit-sender" 
+                                                title="Edit Authorized Sender"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#modalEditSender"
+                                                data-id="<?= (int)$s['id'] ?>"
+                                                data-group-id="<?= (int)$s['group_id'] ?>"
+                                                data-group-title="<?= e($s['group_title']) ?>"
+                                                data-user-id="<?= e($s['telegram_user_id']) ?>"
+                                                data-full-name="<?= e($s['full_name']) ?>"
+                                                data-username="<?= e($s['username'] ?? '') ?>"
+                                                data-notes="<?= e($s['notes'] ?? '') ?>"
+                                                data-active="<?= (int)$s['is_active'] ?>">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <!-- Toggle Status -->
                                         <form method="POST" action="<?= url('senders/toggle') ?>" class="d-inline">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="sender_id" value="<?= $s['id'] ?>">
@@ -195,6 +212,7 @@ $canTrack = AuthService::canTrack();
                                                 <i class="bi bi-<?= $s['is_active'] ? 'pause-fill' : 'play-fill' ?>"></i>
                                             </button>
                                         </form>
+                                        <!-- Delete Sender -->
                                         <form method="POST" action="<?= url('senders/delete') ?>" class="d-inline" onsubmit="return confirm('Remove this authorized sender from this group?');">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="sender_id" value="<?= $s['id'] ?>">
@@ -292,6 +310,83 @@ $canTrack = AuthService::canTrack();
     </div>
 </div>
 
+<!-- Modal: Edit Authorized Sender -->
+<div class="modal fade" id="modalEditSender" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="<?= url('senders/update') ?>" class="modal-content">
+            <?= csrf_field() ?>
+            <input type="hidden" name="sender_id" id="editSenderId" value="">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-dark">
+                    <i class="bi bi-pencil-square text-primary me-2"></i> Edit Authorized Sender
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Update authorized sender details, assigned Telegram group, or tracking status.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Target Telegram Group <span class="text-danger">*</span></label>
+                    <select name="group_id" id="editSenderGroupId" class="form-select" required <?= $assignedGroupId !== null ? 'disabled' : '' ?>>
+                        <?php foreach ($groups as $g): ?>
+                            <option value="<?= $g['id'] ?>">
+                                <?= e($g['title']) ?> (<?= e($g['department'] ?? 'General') ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if ($assignedGroupId !== null): ?>
+                        <input type="hidden" name="group_id" value="<?= $assignedGroupId ?>">
+                    <?php endif; ?>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-7">
+                        <label class="form-label small fw-semibold">Telegram Numeric User ID <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text font-monospace">#</span>
+                            <input type="text" name="telegram_user_id" id="editSenderUserId" class="form-control font-monospace" required>
+                        </div>
+                        <div class="form-text small">From Telegram @userinfobot</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold">Telegram Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text">@</span>
+                            <input type="text" name="username" id="editSenderUsername" class="form-control" placeholder="username">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Sender Full Name <span class="text-danger">*</span></label>
+                    <input type="text" name="full_name" id="editSenderFullName" class="form-control" placeholder="e.g. Abebe Bikila (Airport Supervisor)" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Role / Designation Notes</label>
+                    <input type="text" name="notes" id="editSenderNotes" class="form-control" placeholder="e.g. Airport Morning Shift Supervisor">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Tracking Status <span class="text-danger">*</span></label>
+                    <select name="is_active" id="editSenderIsActive" class="form-select">
+                        <option value="1">Active (Trigger automatic response tracking)</option>
+                        <option value="0">Disabled (Pause tracking for this sender)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-kaldis btn-sm shadow-sm">
+                    <i class="bi bi-check-lg me-1"></i> Update Authorized Sender
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // Dynamic loading of group members into modal quick-select
 async function loadGroupMembersForSender(groupId) {
@@ -329,12 +424,41 @@ function applyQuickMember(select) {
     document.getElementById('inputSenderUsername').value = opt.getAttribute('data-username') || '';
 }
 
-// Auto load for currently selected group on open
+// Auto load for currently selected group on open & Edit Sender Button wiring
 document.addEventListener('DOMContentLoaded', function() {
     const groupSelect = document.getElementById('modalTargetGroup');
     if (groupSelect && groupSelect.value) {
         loadGroupMembersForSender(groupSelect.value);
     }
+
+    // Populate Edit Sender Modal
+    document.querySelectorAll('.btn-edit-sender').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            const groupId = this.getAttribute('data-group-id');
+            const userId = this.getAttribute('data-user-id');
+            const fullName = this.getAttribute('data-full-name');
+            const username = this.getAttribute('data-username');
+            const notes = this.getAttribute('data-notes');
+            const active = this.getAttribute('data-active');
+
+            const idInput = document.getElementById('editSenderId');
+            const groupSelect = document.getElementById('editSenderGroupId');
+            const userIdInput = document.getElementById('editSenderUserId');
+            const nameInput = document.getElementById('editSenderFullName');
+            const usernameInput = document.getElementById('editSenderUsername');
+            const notesInput = document.getElementById('editSenderNotes');
+            const activeSelect = document.getElementById('editSenderIsActive');
+
+            if (idInput) idInput.value = id || '';
+            if (groupSelect) groupSelect.value = groupId || '';
+            if (userIdInput) userIdInput.value = userId || '';
+            if (nameInput) nameInput.value = fullName || '';
+            if (usernameInput) usernameInput.value = username || '';
+            if (notesInput) notesInput.value = notes || '';
+            if (activeSelect) activeSelect.value = active !== undefined ? active : '1';
+        });
+    });
 });
 </script>
 <?php endif; ?>

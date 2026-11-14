@@ -179,6 +179,7 @@ match (true) {
     // Authorized Senders routes
     $path === 'senders' && $requestMethod === 'GET' => (new AuthorizedSenderController())->index(),
     $path === 'senders/create' && $requestMethod === 'POST' => (new AuthorizedSenderController())->create(),
+    $path === 'senders/update' && $requestMethod === 'POST' => (new AuthorizedSenderController())->update(),
     $path === 'senders/toggle' && $requestMethod === 'POST' => (new AuthorizedSenderController())->toggle(),
     $path === 'senders/delete' && $requestMethod === 'POST' => (new AuthorizedSenderController())->delete(),
     $path === 'api/senders/group-members' && $requestMethod === 'GET' => (new AuthorizedSenderController())->groupMembers(),

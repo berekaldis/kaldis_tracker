@@ -127,6 +127,9 @@ $isSuperAdmin = AuthService::isSuperAdmin();
                                     <a href="<?= url('groups/view?id=' . $g['id']) ?>" class="btn btn-sm btn-outline-dark" title="View Members">
                                         <i class="bi bi-people"></i> Roster
                                     </a>
+                                    <a href="<?= url('senders?group_id=' . $g['id']) ?>" class="btn btn-sm btn-outline-secondary" title="View &amp; Edit Authorized Senders">
+                                        <i class="bi bi-person-check"></i> Senders
+                                    </a>
 
                                     <?php if ($isOwner): ?>
                                         <form method="POST" action="<?= url('groups/health-check') ?>" class="d-inline">
