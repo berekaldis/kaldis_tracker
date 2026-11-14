@@ -24,23 +24,6 @@ class SettingsController
             $webhookUrl = url('webhook.php');
         }
 
-        $authUsers = config('telegram.authorized_user_ids', []);
-        $authUsersList = is_array($authUsers) ? $authUsers : array_filter(array_map('trim', explode(',', (string)$authUsers)));
-        $authUsersList = array_values(array_unique(array_filter(array_map('strval', $authUsersList))));
-        $authUsersStr = implode(', ', $authUsersList);
-
-        // Fetch known group members to assist in adding authorized senders
-        $knownMembers = Database::fetchAll(
-            "SELECT id, telegram_user_id, full_name, username, is_bot 
-             FROM members 
-             WHERE is_bot = 0 
-             ORDER BY updated_at DESC LIMIT 50"
-        );
-        $membersMap = [];
-        foreach ($knownMembers as $m) {
-            $membersMap[(string)$m['telegram_user_id']] = $m;
-        }
-
         $trackingMode = (string)config('telegram.tracking_mode', 'all_authorized');
         $trackAllMessages = (bool)config('telegram.track_all_messages', true);
         $trackHashtag = config('telegram.track_hashtag', '#track');
@@ -60,10 +43,6 @@ class SettingsController
             'botUsername' => $botUsername,
             'webhookSecret' => $webhookSecret,
             'webhookUrl' => $webhookUrl,
-            'authUsersStr' => $authUsersStr,
-            'authUsersList' => $authUsersList,
-            'knownMembers' => $knownMembers,
-            'membersMap' => $membersMap,
             'trackingMode' => $trackingMode,
             'trackAllMessages' => $trackAllMessages,
             'trackHashtag' => $trackHashtag,
@@ -87,49 +66,36 @@ class SettingsController
         $webhookSecret = trim($_POST['webhook_secret'] ?? '');
         $webhookUrl = trim($_POST['webhook_url'] ?? '');
 
-        // Sanitize and normalize multiple authorized sender Telegram user IDs
-        $authorizedUserIdsInput = trim($_POST['authorized_user_ids'] ?? '');
-        $rawIds = preg_split('/[\s,]+/', $authorizedUserIdsInput, -1, PREG_SPLIT_NO_EMPTY);
-        $cleanIds = [];
-        foreach ($rawIds as $id) {
-            $cleanId = trim($id);
-            if (preg_match('/^-?\d+$/', $cleanId)) {
-                $cleanIds[] = $cleanId;
-            }
-        }
-        $cleanIds = array_values(array_unique($cleanIds));
-        $authorizedUserIds = implode(', ', $cleanIds);
-        $trackingMode = trim($_POST['tracking_mode'] ?? 'all_authorized');
-        if (!in_array($trackingMode, ['all_authorized', 'all_messages', 'trigger_only'])) {
-            $trackingMode = 'all_authorized';
-        }
-        $trackAllMessages = ($trackingMode !== 'trigger_only') ? '1' : '0';
-        $trackHashtag = trim($_POST['track_hashtag'] ?? '#track');
-        $trackCommand = trim($_POST['track_command'] ?? '/track');
-
-        if (!str_starts_with($trackHashtag, '#')) {
-            $trackHashtag = '#' . $trackHashtag;
-        }
-        if (!str_starts_with($trackCommand, '/')) {
-            $trackCommand = '/' . $trackCommand;
-        }
-
-        SettingService::setMany([
+        $settingsToSave = [
             'telegram_bot_token' => $botToken,
             'telegram_bot_username' => $botUsername,
             'telegram_webhook_secret' => $webhookSecret,
             'telegram_webhook_url' => $webhookUrl,
-            'telegram_authorized_user_ids' => $authorizedUserIds,
             'telegram_tracking_mode' => $trackingMode,
             'telegram_track_all_messages' => $trackAllMessages,
             'telegram_track_hashtag' => $trackHashtag,
             'telegram_track_command' => $trackCommand,
-        ]);
+        ];
+
+        // Only update global authorized user IDs if explicitly provided
+        if (isset($_POST['authorized_user_ids'])) {
+            $authorizedUserIdsInput = trim($_POST['authorized_user_ids']);
+            $rawIds = preg_split('/[\s,]+/', $authorizedUserIdsInput, -1, PREG_SPLIT_NO_EMPTY);
+            $cleanIds = [];
+            foreach ($rawIds as $id) {
+                $cleanId = trim($id);
+                if (preg_match('/^-?\d+$/', $cleanId)) {
+                    $cleanIds[] = $cleanId;
+                }
+            }
+            $settingsToSave['telegram_authorized_user_ids'] = implode(', ', array_values(array_unique($cleanIds)));
+        }
+
+        SettingService::setMany($settingsToSave);
 
         AuditService::log('bot_configuration_updated', 'settings', 'telegram', [
             'bot_username' => $botUsername,
             'webhook_url' => $webhookUrl,
-            'authorized_users' => $authorizedUserIds,
             'tracking_mode' => $trackingMode,
             'track_hashtag' => $trackHashtag,
         ]);

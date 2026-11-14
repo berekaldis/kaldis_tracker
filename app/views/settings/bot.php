@@ -158,81 +158,11 @@
         </div>
     </div>
 
-    <!-- Section 2: Authorized Senders (Who initiates tracking) -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-            <h6 class="card-title mb-0 fw-bold text-dark">
-                <i class="bi bi-people-fill text-primary me-2"></i> 2. Authorized Senders
-            </h6>
-            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1" id="authCountBadge">
-                <?= count($authUsersList ?? []) ?> Active
-            </span>
-        </div>
-        <div class="card-body p-4">
-            <p class="text-muted small mb-2">
-                Messages sent in monitored Telegram groups by any of these <strong>authorized supervisors or managers</strong> will automatically be tracked for team responses.
-            </p>
-            <div class="mb-3">
-                <a href="<?= url('senders') ?>" class="btn btn-sm btn-outline-primary shadow-sm">
-                    <i class="bi bi-person-check-fill me-1"></i> Manage Authorized Senders by Specific Group &rarr;
-                </a>
-            </div>
-
-            <!-- Visual Senders Chips Container -->
-            <div class="p-3 bg-light rounded border mb-3">
-                <div class="small fw-semibold text-secondary text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.05em;">
-                    Active Authorized Telegram IDs
-                </div>
-                <div id="authorizedChipsContainer" class="d-flex flex-wrap gap-2 align-items-center">
-                    <!-- Populated via JavaScript on load -->
-                </div>
-            </div>
-
-            <!-- Add Sender Inputs -->
-            <div class="row g-2 align-items-end">
-                <div class="col-md-6">
-                    <label class="form-label small fw-semibold">Add by Numeric Telegram User ID</label>
-                    <div class="input-group">
-                        <span class="input-group-text font-monospace">#</span>
-                        <input type="text" id="newSenderIdInput" class="form-control font-monospace" placeholder="e.g. 814523272" onkeydown="if(event.key==='Enter'){event.preventDefault(); addSenderFromInput();}">
-                        <button type="button" class="btn btn-kaldis" onclick="addSenderFromInput()">
-                            <i class="bi bi-plus-lg me-1"></i> Add
-                        </button>
-                    </div>
-                    <div class="form-text small">Message <code>@userinfobot</code> in Telegram to find any user's numeric ID.</div>
-                </div>
-
-                <?php if (!empty($knownMembers)): ?>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Or Pick from Known Group Members</label>
-                        <div class="input-group">
-                            <select id="quickMemberSelect" class="form-select font-monospace small">
-                                <option value="">-- Select Member / Admin --</option>
-                                <?php foreach ($knownMembers as $km): ?>
-                                    <option value="<?= e($km['telegram_user_id']) ?>" data-name="<?= e($km['full_name'] . ($km['username'] ? ' (@' . $km['username'] . ')' : '')) ?>">
-                                        <?= e($km['full_name']) ?> <?= $km['username'] ? '(@' . e($km['username']) . ')' : '' ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="button" class="btn btn-outline-secondary" onclick="addSenderFromSelect()">
-                                <i class="bi bi-plus-lg me-1"></i> Quick Add
-                            </button>
-                        </div>
-                        <div class="form-text small">Team members already recognized in your groups.</div>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <!-- Hidden / synced comma separated string -->
-            <input type="hidden" id="authorized_user_ids" name="authorized_user_ids" value="<?= e($authUsersStr) ?>">
-        </div>
-    </div>
-
-    <!-- Section 3: Simple Tracking Mode & Triggers -->
+    <!-- Section 2: Tracking Preference -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white py-3">
             <h6 class="card-title mb-0 fw-bold text-dark">
-                <i class="bi bi-sliders text-primary me-2"></i> 3. Tracking Preference
+                <i class="bi bi-sliders text-primary me-2"></i> 2. Tracking Preference
             </h6>
         </div>
         <div class="card-body p-4">
@@ -242,7 +172,7 @@
                         <input class="form-check-input ms-0 me-2" type="radio" name="tracking_mode" id="mode_all_authorized" value="all_authorized" <?= $trackingMode === 'all_authorized' ? 'checked' : '' ?>>
                         <span class="fw-semibold text-dark">Automatic Conversation Tracking (Recommended)</span>
                         <span class="d-block text-muted small mt-1">
-                            Tracks every message sent by your authorized senders automatically. No hashtags required.
+                            Tracks conversations sent by group authorized senders automatically. No hashtags required.
                         </span>
                     </label>
                 </div>
@@ -285,131 +215,4 @@ function generateSecretToken() {
     }
     document.getElementById('secretTokenInput').value = 'Kaldis_' + token;
 }
-
-// Multi-Authorized Senders Interactive Management
-let currentAuthorizedIds = <?= json_encode($authUsersList ?? []) ?>.map(String);
-const membersDirectory = <?= json_encode(array_map(function($m) {
-    return [
-        'id' => (string)$m['telegram_user_id'],
-        'name' => $m['full_name'] . ($m['username'] ? ' (@' . $m['username'] . ')' : '')
-    ];
-}, array_values($membersMap ?? []))) ?>;
-
-function getMemberNameById(id) {
-    const found = membersDirectory.find(m => String(m.id) === String(id));
-    return found ? found.name : 'Authorized Sender';
-}
-
-function renderAuthorizedChips() {
-    const container = document.getElementById('authorizedChipsContainer');
-    const badge = document.getElementById('authCountBadge');
-    if (!container) return;
-
-    if (badge) {
-        badge.textContent = `${currentAuthorizedIds.length} Active`;
-    }
-
-    if (currentAuthorizedIds.length === 0) {
-        container.innerHTML = `<span class="text-muted small fst-italic">No authorized senders configured yet. Add at least 1 ID below.</span>`;
-        return;
-    }
-
-    let html = '';
-    currentAuthorizedIds.forEach((id, index) => {
-        const name = getMemberNameById(id);
-        const isPrimary = index === 0;
-        html += `
-            <div class="authorized-chip d-inline-flex align-items-center px-3 py-1.5 bg-white border rounded-pill shadow-sm">
-                <span class="badge ${isPrimary ? 'bg-primary' : 'bg-secondary'} rounded-circle p-1 me-2" style="font-size: 0.65rem;">
-                    <i class="bi ${isPrimary ? 'bi-star-fill' : 'bi-person-fill'}"></i>
-                </span>
-                <div class="me-2 text-start">
-                    <span class="fw-semibold text-dark small d-block" style="line-height: 1.2;">${escapeHtml(name)}</span>
-                    <span class="font-monospace text-muted" style="font-size: 0.72rem;">ID: ${escapeHtml(id)}</span>
-                </div>
-                <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 text-decoration-none" title="Remove Sender" onclick="removeAuthorizedSender('${escapeHtml(id)}')">
-                    <i class="bi bi-x-circle-fill"></i>
-                </button>
-            </div>
-        `;
-    });
-    container.innerHTML = html;
-}
-
-function addSenderId(rawId, customName) {
-    const cleanId = String(rawId).trim();
-    if (!cleanId || !/^-?\d+$/.test(cleanId)) {
-        alert('Please enter a valid numeric Telegram User ID (e.g. 814523272).');
-        return false;
-    }
-
-    if (currentAuthorizedIds.includes(cleanId)) {
-        alert(`Telegram ID ${cleanId} is already in the list.`);
-        return false;
-    }
-
-    if (customName && !membersDirectory.find(m => String(m.id) === cleanId)) {
-        membersDirectory.push({ id: cleanId, name: customName });
-    }
-
-    currentAuthorizedIds.push(cleanId);
-    syncToRawInput();
-    renderAuthorizedChips();
-    return true;
-}
-
-function addSenderFromInput() {
-    const input = document.getElementById('newSenderIdInput');
-    if (!input) return;
-    const val = input.value.trim();
-    if (addSenderId(val)) {
-        input.value = '';
-    }
-}
-
-function addSenderFromSelect() {
-    const select = document.getElementById('quickMemberSelect');
-    if (!select || !select.value) {
-        alert('Please select a member from the dropdown first.');
-        return;
-    }
-    const id = select.value;
-    const option = select.options[select.selectedIndex];
-    const name = option ? option.getAttribute('data-name') : '';
-    if (addSenderId(id, name)) {
-        select.value = '';
-    }
-}
-
-function removeAuthorizedSender(id) {
-    id = String(id);
-    if (currentAuthorizedIds.length <= 1) {
-        if (!confirm('Warning: Removing all authorized senders may stop automatic tracking. Remove anyway?')) {
-            return;
-        }
-    }
-    currentAuthorizedIds = currentAuthorizedIds.filter(item => item !== id);
-    syncToRawInput();
-    renderAuthorizedChips();
-}
-
-function syncToRawInput() {
-    const rawInput = document.getElementById('authorized_user_ids');
-    if (rawInput) {
-        rawInput.value = currentAuthorizedIds.join(', ');
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    renderAuthorizedChips();
-});
 </script>
