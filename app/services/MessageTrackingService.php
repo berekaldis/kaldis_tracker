@@ -49,18 +49,22 @@ class MessageTrackingService
             };
 
             // Mark update as processed
-            Database::execute(
-                "UPDATE telegram_updates SET processed_at = :now WHERE update_id = :uid",
-                [':now' => utc_now(), ':uid' => $updateId]
-            );
+            try {
+                Database::execute(
+                    "UPDATE telegram_updates SET processed_at = :now WHERE update_id = :uid",
+                    [':now' => utc_now(), ':uid' => $updateId]
+                );
+            } catch (\Throwable) {}
 
             return $result;
         } catch (\Throwable $e) {
             error_log("Error processing update {$updateId}: " . $e->getMessage() . "\n" . $e->getTraceAsString());
-            Database::execute(
-                "UPDATE telegram_updates SET error_message = :err WHERE update_id = :uid",
-                [':err' => $e->getMessage(), ':uid' => $updateId]
-            );
+            try {
+                Database::execute(
+                    "UPDATE telegram_updates SET error_message = :err WHERE update_id = :uid",
+                    [':err' => $e->getMessage(), ':uid' => $updateId]
+                );
+            } catch (\Throwable) {}
             return ['status' => 'error', 'error' => $e->getMessage()];
         }
     }
@@ -205,8 +209,8 @@ class MessageTrackingService
             return ['status' => 'checkin_dispatched', 'group_id' => $group['id']];
         }
 
-        // Case 1: Message contains #track from authorized user
-        if ($isAuthorizedUser && $hasTrackHashtag) {
+        // Case 1: Message contains #track from authorized user or group admin
+        if ($hasTrackHashtag) {
             return $this->registerTrackedMessage(
                 (int)$group['id'],
                 $messageId,
@@ -218,8 +222,8 @@ class MessageTrackingService
             );
         }
 
-        // Case 2: Reply with /track to an existing message from authorized user
-        if ($isAuthorizedUser && $hasTrackCommand && isset($message['reply_to_message'])) {
+        // Case 2: Reply with /track to an existing message
+        if ($hasTrackCommand && isset($message['reply_to_message'])) {
             $repliedMessage = $message['reply_to_message'];
             $targetMessageId = (int)$repliedMessage['message_id'];
             $targetText = $repliedMessage['text'] ?? $repliedMessage['caption'] ?? '';
@@ -849,7 +853,25 @@ class MessageTrackingService
 
         // Global fallback for super-admin sender IDs configured in system settings
         $globalAuth = (array)config('telegram.authorized_user_ids', []);
-        return in_array((string)$userId, array_map('strval', $globalAuth));
+        if (in_array((string)$userId, array_map('strval', $globalAuth))) {
+            return true;
+        }
+
+        // Check if user is an admin or creator in this group roster
+        try {
+            $adminRole = Database::fetch(
+                "SELECT gm.role 
+                 FROM group_members gm 
+                 JOIN members m ON gm.member_id = m.id 
+                 WHERE gm.group_id = :gid AND m.telegram_user_id = :uid AND gm.is_active = 1",
+                [':gid' => $groupId, ':uid' => $userId]
+            );
+            if (!empty($adminRole['role']) && in_array($adminRole['role'], ['creator', 'admin'])) {
+                return true;
+            }
+        } catch (\Throwable) {}
+
+        return false;
     }
 
     /**
@@ -902,7 +924,7 @@ class MessageTrackingService
             ]
         );
 
-        return Database::fetch("SELECT * FROM telegram_groups WHERE id = :id", [':id' => Database::lastInsertId()]);
+        return Database::fetch("SELECT * FROM telegram_groups WHERE telegram_chat_id = :cid", [':cid' => $chatId]);
     }
 
     /**
@@ -937,7 +959,8 @@ class MessageTrackingService
             $now = utc_now();
             Database::execute(
                 "INSERT INTO members (telegram_user_id, full_name, username, is_bot, created_at, updated_at)
-                 VALUES (:uid, :fn, :un, :bot, :created_at, :updated_at)",
+                 VALUES (:uid, :fn, :un, :bot, :created_at, :updated_at)
+                 ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), username = VALUES(username), updated_at = VALUES(updated_at)",
                 [
                     ':uid' => $userId,
                     ':fn' => $fullName,
@@ -947,28 +970,40 @@ class MessageTrackingService
                     ':updated_at' => $now,
                 ]
             );
-            $member = Database::fetch("SELECT * FROM members WHERE id = :id", [':id' => Database::lastInsertId()]);
+            $member = Database::fetch("SELECT * FROM members WHERE telegram_user_id = :uid", [':uid' => $userId]);
+        }
+
+        if (!$member) {
+            $member = [
+                'id' => 0,
+                'telegram_user_id' => $userId,
+                'full_name' => $fullName,
+                'username' => $username,
+                'is_bot' => $isBot,
+            ];
         }
 
         // Link in group_members if not present
-        $gm = Database::fetch(
-            "SELECT * FROM group_members WHERE group_id = :gid AND member_id = :mid",
-            [':gid' => $groupId, ':mid' => $member['id']]
-        );
-
-        if (!$gm) {
-            $now = utc_now();
-            Database::execute(
-                "INSERT INTO group_members (group_id, member_id, role, joined_at, source, is_active, created_at, updated_at)
-                 VALUES (:gid, :mid, 'member', :joined_at, 'seen_in_group', 1, :created_at, :updated_at)",
-                [
-                    ':gid' => $groupId,
-                    ':mid' => $member['id'],
-                    ':joined_at' => $joinedAt,
-                    ':created_at' => $now,
-                    ':updated_at' => $now,
-                ]
+        if (!empty($member['id'])) {
+            $gm = Database::fetch(
+                "SELECT * FROM group_members WHERE group_id = :gid AND member_id = :mid",
+                [':gid' => $groupId, ':mid' => $member['id']]
             );
+
+            if (!$gm) {
+                $now = utc_now();
+                Database::execute(
+                    "INSERT IGNORE INTO group_members (group_id, member_id, role, joined_at, source, is_active, created_at, updated_at)
+                     VALUES (:gid, :mid, 'member', :joined_at, 'seen_in_group', 1, :created_at, :updated_at)",
+                    [
+                        ':gid' => $groupId,
+                        ':mid' => $member['id'],
+                        ':joined_at' => $joinedAt,
+                        ':created_at' => $now,
+                        ':updated_at' => $now,
+                    ]
+                );
+            }
         }
 
         return $member;
