@@ -226,10 +226,28 @@ class Database
                 }
             }
 
+            // Check thread_id
+            if (!isset($tmCols['thread_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN thread_id BIGINT NULL AFTER telegram_user_id"));
+                $log[] = 'Added thread_id to tracked_messages';
+            }
+
+            // Check reference_code
+            if (!isset($tmCols['reference_code'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN reference_code VARCHAR(64) NULL AFTER thread_id"));
+                $log[] = 'Added reference_code to tracked_messages';
+            }
+
             // Check deadline_at
             if (!isset($tmCols['deadline_at'])) {
                 $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN deadline_at DATETIME NULL AFTER message_date"));
                 $log[] = 'Added deadline_at to tracked_messages';
+            }
+
+            // Check edited_at
+            if (!isset($tmCols['edited_at'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN edited_at DATETIME NULL AFTER deadline_at"));
+                $log[] = 'Added edited_at to tracked_messages';
             }
 
             // Check tracking_source ENUM
@@ -239,6 +257,12 @@ class Database
                     $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages MODIFY COLUMN tracking_source ENUM('hashtag', 'command', 'dashboard', 'auto') NOT NULL DEFAULT 'auto'"));
                     $log[] = 'Updated tracking_source ENUM to include auto';
                 }
+            }
+
+            // Check is_active
+            if (!isset($tmCols['is_active'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE tracked_messages ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER tracking_source"));
+                $log[] = 'Added is_active to tracked_messages';
             }
         } catch (\Throwable $e) {
             $log[] = 'tracked_messages repair err: ' . $e->getMessage();
@@ -256,6 +280,21 @@ class Database
                 $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN member_telegram_user_id BIGINT NOT NULL DEFAULT 0 AFTER member_id"));
                 $log[] = 'Added member_telegram_user_id to message_responses';
             }
+            if (!isset($mrCols['response_telegram_message_id'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN response_telegram_message_id BIGINT NULL AFTER member_telegram_user_id"));
+                $log[] = 'Added response_telegram_message_id to message_responses';
+            }
+            if (!isset($mrCols['response_text'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN response_text TEXT NULL AFTER response_telegram_message_id"));
+                $log[] = 'Added response_text to message_responses';
+            }
+            if (!isset($mrCols['response_date'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN response_date DATETIME NULL AFTER response_text"));
+                if (isset($mrCols['created_at'])) {
+                    $pdo->exec(self::prefixQuery("UPDATE message_responses SET response_date = created_at WHERE response_date IS NULL"));
+                }
+                $log[] = 'Added response_date to message_responses';
+            }
             if (!isset($mrCols['reviewed_at'])) {
                 $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN reviewed_at DATETIME NULL AFTER reviewed_by_admin_id"));
                 $log[] = 'Added reviewed_at to message_responses';
@@ -263,6 +302,10 @@ class Database
             if (!isset($mrCols['excluded_reason'])) {
                 $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN excluded_reason TEXT NULL AFTER matching_method"));
                 $log[] = 'Added excluded_reason to message_responses';
+            }
+            if (!isset($mrCols['matching_method'])) {
+                $pdo->exec(self::prefixQuery("ALTER TABLE message_responses ADD COLUMN matching_method ENUM('direct_reply', 'reference', 'manual', 'reaction') NULL AFTER status"));
+                $log[] = 'Added matching_method to message_responses';
             }
             if (isset($mrCols['status'])) {
                 $type = strtolower($mrCols['status']['Type'] ?? '');

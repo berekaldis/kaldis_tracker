@@ -10,9 +10,14 @@ ALTER TABLE `tg_tracked_messages` MODIFY COLUMN `tracking_source` ENUM('hashtag'
 
 -- 2. Message Responses Table
 ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `member_telegram_user_id` BIGINT NOT NULL DEFAULT 0 AFTER `member_id`;
+ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `response_telegram_message_id` BIGINT NULL AFTER `member_telegram_user_id`;
+ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `response_text` TEXT NULL AFTER `response_telegram_message_id`;
+ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `response_date` DATETIME NULL AFTER `response_text`;
+ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `matching_method` ENUM('direct_reply', 'reference', 'manual', 'reaction') NULL AFTER `status`;
 ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `reviewed_at` DATETIME NULL AFTER `reviewed_by_admin_id`;
 ALTER TABLE `tg_message_responses` ADD COLUMN IF NOT EXISTS `excluded_reason` TEXT NULL AFTER `matching_method`;
 ALTER TABLE `tg_message_responses` MODIFY COLUMN `status` ENUM('replied', 'pending_review', 'rejected', 'unknown', 'excluded') NOT NULL DEFAULT 'unknown';
+UPDATE `tg_message_responses` SET `response_date` = `created_at` WHERE `response_date` IS NULL;
 
 -- 3. Members Table
 ALTER TABLE `tg_members` ADD COLUMN IF NOT EXISTS `telegram_user_id` BIGINT NOT NULL DEFAULT 0 AFTER `id`;

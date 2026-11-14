@@ -95,7 +95,14 @@ register_shutdown_function(function() use ($debug) {
     }
 });
 
-// 5. Parse Request URI & Method
+// 5. Automatic Database Schema Integrity & Migration
+try {
+    \App\Services\Database::ensureSchemaIntegrity();
+} catch (\Throwable $e) {
+    error_log("Database schema check notice: " . $e->getMessage());
+}
+
+// 6. Parse Request URI & Method
 $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 if ($requestMethod === 'HEAD') {

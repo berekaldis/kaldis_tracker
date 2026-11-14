@@ -269,12 +269,24 @@ class DashboardController
         $percentage = ($denominator > 0) ? (float)round(($replied / $denominator) * 100, 1) : 0.0;
 
         // Turnaround metrics for replied members
-        $responseTimes = Database::fetchAll(
-            "SELECT TIMESTAMPDIFF(SECOND, :mdate, response_date) AS diff_seconds 
-             FROM message_responses 
-             WHERE tracked_message_id = :tmid AND status = 'replied' AND response_date IS NOT NULL",
-            [':mdate' => $messageDate, ':tmid' => $trackedMessageId]
-        );
+        $responseTimes = [];
+        try {
+            $responseTimes = Database::fetchAll(
+                "SELECT TIMESTAMPDIFF(SECOND, :mdate, COALESCE(response_date, created_at)) AS diff_seconds 
+                 FROM message_responses 
+                 WHERE tracked_message_id = :tmid AND status = 'replied' AND (response_date IS NOT NULL OR created_at IS NOT NULL)",
+                [':mdate' => $messageDate, ':tmid' => $trackedMessageId]
+            );
+        } catch (\Throwable) {
+            try {
+                $responseTimes = Database::fetchAll(
+                    "SELECT TIMESTAMPDIFF(SECOND, :mdate, created_at) AS diff_seconds 
+                     FROM message_responses 
+                     WHERE tracked_message_id = :tmid AND status = 'replied' AND created_at IS NOT NULL",
+                    [':mdate' => $messageDate, ':tmid' => $trackedMessageId]
+                );
+            } catch (\Throwable) {}
+        }
 
         $avgTurnaroundSeconds = null;
         $fastestTurnaroundSeconds = null;
